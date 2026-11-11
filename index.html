@@ -1335,7 +1335,7 @@
         if (activeNameEl) activeNameEl.textContent = active ? active.name : 'Canvas';
       }
       function updateCanvasAddress() {
-        localStorage.setItem('daily-canvas-active', activeCanvasId);
+        if (!isGroupCanvas()) localStorage.setItem('daily-canvas-active', activeCanvasId);
         const url = new URL(location.href);
         if (isGroupCanvas()) {
           url.searchParams.delete('canvas'); url.searchParams.set('group', groupRoomId()); url.searchParams.set('key', groupSecret);
