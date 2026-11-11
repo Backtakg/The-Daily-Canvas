@@ -186,6 +186,9 @@
             <button class="tool-btn" id="eraserTool" aria-label="Eraser" title="Eraser (E)">
               <svg viewBox="0 0 24 24"><path d="m7 16 8.8-9a2 2 0 0 1 2.8 0l2.4 2.4a2 2 0 0 1 0 2.8L12 22H7l-5-5 9-9"/><path d="m12 22 7-7"/></svg><span class="tool-label">Eraser</span>
             </button>
+            <button class="tool-btn" id="lineTool" aria-label="Line tool" title="Straight line (L)">
+              <svg viewBox="0 0 24 24"><path d="M5 19 19 5"/><circle cx="5" cy="19" r="1.5"/><circle cx="19" cy="5" r="1.5"/></svg><span class="tool-label">Line</span>
+            </button>
           </div>
           <span class="separator"></span>
           <div class="palette" aria-label="Colors">
@@ -234,6 +237,7 @@
     <div class="shortcut-list">
       <div class="shortcut-row"><span>Select brush</span><kbd>B</kbd></div>
       <div class="shortcut-row"><span>Select eraser</span><kbd>E</kbd></div>
+      <div class="shortcut-row"><span>Select line tool</span><kbd>L</kbd></div>
       <div class="shortcut-row"><span>Enter / exit focus mode</span><kbd>F</kbd></div>
       <div class="shortcut-row"><span>Exit focus mode or close this panel</span><kbd>Esc</kbd></div>
     </div>
@@ -249,6 +253,7 @@
       const ctx = canvas.getContext('2d', { alpha: false });
       const brushBtn = document.getElementById('brushTool');
       const eraserBtn = document.getElementById('eraserTool');
+      const lineBtn = document.getElementById('lineTool');
       const sizeInput = document.getElementById('brushSize');
       const sizeValue = document.getElementById('sizeValue');
       const undoBtn = document.getElementById('undoBtn');
@@ -264,6 +269,7 @@
       let drawing = false;
       let lastPoint = null;
       let currentStroke = null;
+      let linePreview = null;
       let history = [];
       let historyIndex = -1;
       let toastTimer = null;
@@ -503,7 +509,8 @@
         tool = next;
         brushBtn.classList.toggle('active', tool === 'brush');
         eraserBtn.classList.toggle('active', tool === 'eraser');
-        canvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
+        lineBtn.classList.toggle('active', tool === 'line');
+        canvas.style.cursor = tool === 'eraser' ? 'cell' : tool === 'line' ? 'crosshair' : 'crosshair';
       }
       function pointFromEvent(event) {
         const rect = canvas.getBoundingClientRect();
@@ -519,17 +526,43 @@
         const strokeColor = tool === 'eraser' ? '#ffffff' : color;
         const strokeSize = tool === 'eraser' ? Math.max(size * 3, 12) : size;
         currentStroke = { color: strokeColor, size: strokeSize / cssWidth, points: [{ x: lastPoint.x / cssWidth, y: lastPoint.y / cssHeight }] };
-        ctx.beginPath();
-        ctx.arc(lastPoint.x, lastPoint.y, Math.max(strokeSize / 2, 0.6), 0, Math.PI * 2);
-        ctx.fillStyle = strokeColor;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(lastPoint.x, lastPoint.y);
+        if (tool === 'line') {
+          linePreview = document.createElement('canvas');
+          linePreview.width = canvas.width;
+          linePreview.height = canvas.height;
+          linePreview.getContext('2d').drawImage(canvas, 0, 0);
+        } else {
+          ctx.beginPath();
+          ctx.arc(lastPoint.x, lastPoint.y, Math.max(strokeSize / 2, 0.6), 0, Math.PI * 2);
+          ctx.fillStyle = strokeColor;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(lastPoint.x, lastPoint.y);
+        }
       }
       function draw(event) {
         if (!drawing) return;
         event.preventDefault();
         const p = pointFromEvent(event);
+        if (tool === 'line') {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(linePreview, 0, 0);
+          ctx.save();
+          ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+          ctx.strokeStyle = currentStroke.color;
+          ctx.lineWidth = currentStroke.size * cssWidth;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(lastPoint.x, lastPoint.y);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+          ctx.restore();
+          currentStroke.points = [
+            { x: lastPoint.x / cssWidth, y: lastPoint.y / cssHeight },
+            { x: p.x / cssWidth, y: p.y / cssHeight }
+          ];
+          return;
+        }
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.strokeStyle = currentStroke.color;
@@ -547,6 +580,7 @@
         lastPoint = null;
         const completed = currentStroke;
         currentStroke = null;
+        linePreview = null;
         pushHistory();
         if (!completed || !sharedReady) {
           showToast('Still connecting — this stroke is only on your screen.');
@@ -592,6 +626,7 @@
 
       brushBtn.addEventListener('click', () => setTool('brush'));
       eraserBtn.addEventListener('click', () => setTool('eraser'));
+      lineBtn.addEventListener('click', () => setTool('line'));
       document.querySelectorAll('.swatch').forEach(button => {
         button.addEventListener('click', () => {
           color = button.dataset.color;
@@ -686,7 +721,7 @@
       });
       canvas.addEventListener('pointermove', draw);
       canvas.addEventListener('pointerleave', event => sendCursor(event, true));
-      canvas.addEventListener('pointerup', event => { endDraw(); sendCursor(event, false, true); });
+      canvas.addEventListener('pointerup', event => { if (drawing && tool === 'line') draw(event); endDraw(); sendCursor(event, false, true); });
       canvas.addEventListener('pointercancel', event => { endDraw(); sendCursor(event, false, true); });
       canvas.addEventListener('lostpointercapture', event => { endDraw(); sendCursor(event, false, true); });
       window.addEventListener('keydown', event => {
@@ -697,6 +732,7 @@
         else if (event.key.toLowerCase() === 'f') setFocusMode(!studio.classList.contains('focus-mode'));
         else if (event.key.toLowerCase() === 'b') setTool('brush');
         else if (event.key.toLowerCase() === 'e') setTool('eraser');
+        else if (event.key.toLowerCase() === 'l') setTool('line');
       });
 
       setCanvasSize(false);
