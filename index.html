@@ -346,7 +346,6 @@
           </div>
           <span class="separator"></span>
           <label class="size-wrap" for="brushSize"><span>Size</span><input id="brushSize" type="range" min="1" max="40" value="5"><span class="size-value" id="sizeValue">5</span></label>
-          <label class="surface-control" for="surfaceSelect"><span>Studio</span><select id="surfaceSelect" aria-label="Choose studio background"><option value="stone">Stone</option><option value="sage">Sage</option><option value="sand">Sand</option><option value="dusk">Mist</option></select><input class="custom-color studio-color" id="studioColor" type="color" value="#f0eee7" aria-label="Choose custom studio background color" title="Custom studio background"></label>
           <span class="toolbar-spacer"></span>
           <div class="tool-group">
             <button class="action-btn" id="undoBtn" title="Undo your last stroke" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg></button>
@@ -1327,36 +1326,6 @@
           showToast('Could not copy the link. Please copy the page address.');
         }
       });
-      const canvasWrap = document.querySelector('.canvas-wrap');
-      const surfaceSelect = document.getElementById('surfaceSelect');
-      const studioColorInput = document.getElementById('studioColor');
-      const savedStudioColor = localStorage.getItem('daily-canvas-studio-color');
-      function applySurface() {
-        canvasWrap.dataset.surface = surfaceSelect.value;
-        canvasWrap.style.backgroundColor = '';
-        localStorage.setItem('daily-canvas-surface', surfaceSelect.value);
-      }
-      function applyCustomStudioColor(value, persist = true) {
-        if (!/^#[0-9a-f]{6}$/i.test(value)) return;
-        canvasWrap.dataset.surface = 'custom';
-        canvasWrap.style.backgroundColor = value;
-        studioColorInput.value = value;
-        if (persist) localStorage.setItem('daily-canvas-studio-color', value);
-      }
-      if (['stone', 'sage', 'sand', 'dusk'].includes(localStorage.getItem('daily-canvas-surface'))) {
-        surfaceSelect.value = localStorage.getItem('daily-canvas-surface');
-      }
-      surfaceSelect.addEventListener('change', () => {
-        localStorage.removeItem('daily-canvas-studio-color');
-        applySurface();
-        showToast('Studio background updated — only you can see this.');
-      });
-      studioColorInput.addEventListener('input', event => {
-        applyCustomStudioColor(event.target.value);
-        showToast('Custom studio background applied.');
-      });
-      if (savedStudioColor && /^#[0-9a-f]{6}$/i.test(savedStudioColor)) applyCustomStudioColor(savedStudioColor, false);
-      else applySurface();
       document.getElementById('saveBtn').addEventListener('click', () => {
         const link = document.createElement('a');
         link.download = 'my-daily-canvas.png';
