@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <meta name="referrer" content="no-referrer">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f6f4ee">
@@ -701,7 +702,7 @@
         const activeNameEl = document.getElementById('activeCanvasName');
         if (activeNameEl) activeNameEl.textContent = room.name;
         document.getElementById('onlineStatus')?.setAttribute('aria-label', 'Private group canvas · live members');
-        const presence = supabase.channel('daily-private-group-' + roomId, { config: { presence: { key: makeClientId() }, broadcast: { self: false } } });
+        const presence = supabase.channel('daily-private-group-' + roomId + '-' + secret, { config: { presence: { key: makeClientId() }, broadcast: { self: false } } });
         presenceChannel = presence;
         function updateGroupCount(includeSelf = false) {
           const state = presence.presenceState() || {};
