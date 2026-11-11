@@ -609,10 +609,18 @@
         if (!stroke || !Array.isArray(stroke.points) || !stroke.points.length) return;
         const pts = stroke.points;
         const world = stroke.space === 'world-v1';
-        const toScreen = point => world
-          ? { x: (point.x * 1000 - viewX) * zoom + cssWidth / 2, y: (point.y * 1000 - viewY) * zoom + cssHeight / 2 }
-          : { x: (point.x * cssWidth - viewX) * zoom + cssWidth / 2, y: (point.y * cssHeight - viewY) * zoom + cssHeight / 2 };
-        const width = Math.max(0.5, world ? Number(stroke.size) * 1000 * zoom : Number(stroke.size) * cssWidth * zoom);
+        // World-v1 points are stored in thousandths of a CSS pixel. Keep every
+        // replay (including zoom/pan redraws) in the same world coordinate space.
+        const toScreen = point => {
+          const worldX = world ? Number(point.x) * 1000 : Number(point.x) * cssWidth;
+          const worldY = world ? Number(point.y) * 1000 : Number(point.y) * cssHeight;
+          return {
+            x: (worldX - viewX) * zoom + cssWidth / 2,
+            y: (worldY - viewY) * zoom + cssHeight / 2
+          };
+        };
+        const storedSize = Number(stroke.size);
+        const width = Math.max(0.75, (world ? storedSize * 1000 : storedSize * cssWidth) * zoom);
         ctx.save();
         ctx.strokeStyle = stroke.color;
         ctx.fillStyle = stroke.color;
@@ -1076,12 +1084,20 @@
           showToast('Still connecting — this stroke is only on your screen.');
           return;
         }
-        completed.points = completed.points.map(point => ({
-          x: (((point.x * cssWidth - cssWidth / 2) / zoom + viewX) / 1000),
-          y: (((point.y * cssHeight - cssHeight / 2) / zoom + viewY) / 1000)
-        }));
-        completed.size = completed.size * cssWidth / 1000;
+        completed.points = completed.points.map(point => {
+          const screenX = Number(point.x) * cssWidth;
+          const screenY = Number(point.y) * cssHeight;
+          return {
+            x: (((screenX - cssWidth / 2) / zoom + viewX) / 1000),
+            y: (((screenY - cssHeight / 2) / zoom + viewY) / 1000)
+          };
+        }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+        completed.size = Number(completed.size) * cssWidth / 1000;
         completed.space = 'world-v1';
+        if (!completed.points.length || !Number.isFinite(completed.size)) {
+          showToast('Could not save this stroke. Please try again.');
+          return;
+        }
         saveStatus.textContent = 'Sharing your stroke…';
         const localStrokeId = 'local-' + makeClientId();
         canvasStrokes.push({ id: localStrokeId, session_id: sessionId, canvas_id: activeCanvasId, payload: completed });
