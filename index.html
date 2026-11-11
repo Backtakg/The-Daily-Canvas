@@ -234,7 +234,7 @@
         const event = cursorSendPending; cursorSendPending = null;
         lastCursorSentAt = performance.now();
         const rect = canvas.getBoundingClientRect();
-        presenceChannel.send({ type: 'broadcast', event: 'cursor', payload: { id: cursorId, x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)), hidden: false } }).catch(() => {});
+        presenceChannel.send({ type: 'broadcast', event: 'cursor', payload: { id: cursorId, x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)), hidden: false, drawing: drawing } }).catch(() => {});
       }, 70);
       let lastEventId = 0;
       const pendingEvents = [];
