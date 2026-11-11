@@ -345,7 +345,10 @@
       const canvasStrokes = [];
       const undoStack = [];
       const redoStack = [];
-      const hiddenStrokeIds = new Set();
+      const hiddenStrokeIds = new Set((() => {
+        try { return JSON.parse(sessionStorage.getItem('daily-canvas-hidden-strokes') || '[]').map(String); }
+        catch { return []; }
+      })());
       let toastTimer = null;
       let cssWidth = 0, cssHeight = 0, pixelRatio = 1;
       const sessionId = (() => {
@@ -445,6 +448,7 @@
         if (drawing || !undoStack.length) return;
         const id = undoStack.pop();
         hiddenStrokeIds.add(String(id));
+        sessionStorage.setItem('daily-canvas-hidden-strokes', JSON.stringify([...hiddenStrokeIds]));
         redoStack.push(id);
         renderCanvasLedger();
         updateHistoryButtons();
@@ -454,6 +458,7 @@
         if (drawing || !redoStack.length) return;
         const id = redoStack.pop();
         hiddenStrokeIds.delete(String(id));
+        sessionStorage.setItem('daily-canvas-hidden-strokes', JSON.stringify([...hiddenStrokeIds]));
         undoStack.push(id);
         renderCanvasLedger();
         updateHistoryButtons();
@@ -531,9 +536,11 @@
             if (error) throw error;
             for (const row of (data || []).reverse()) {
               canvasStrokes.push(row);
-              if (row.session_id === sessionId) undoStack.push(row.id);
               lastEventId = Math.max(lastEventId, Number(row.id));
             }
+            const ownRows = canvasStrokes.filter(row => row.session_id === sessionId);
+            undoStack.push(...ownRows.filter(row => !hiddenStrokeIds.has(String(row.id))).map(row => row.id));
+            redoStack.push(...ownRows.filter(row => hiddenStrokeIds.has(String(row.id))).map(row => row.id).reverse());
             renderCanvasLedger();
             updateHistoryButtons();
             sharedReady = true;
