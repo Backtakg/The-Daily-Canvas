@@ -1498,11 +1498,13 @@
         reportSubmit.disabled = true;
         reportSubmit.textContent = 'Sending…';
         try {
+          const reportUrl = new URL(location.href);
+          reportUrl.searchParams.delete('key');
           const { error } = await supabase.from('canvas_reports').insert({
             category,
             details,
             canvas_id: String(activeCanvasId || 'unknown').slice(0, 100),
-            page_url: location.href.slice(0, 500)
+            page_url: reportUrl.toString().slice(0, 500)
           });
           if (error) throw error;
           localStorage.setItem(cooldownKey, String(Date.now()));
