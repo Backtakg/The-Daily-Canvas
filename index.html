@@ -375,7 +375,7 @@
           </div>
         </div>
         <div class="bottomline">
-          <span class="save-state"><span class="save-dot" id="liveDot" aria-hidden="true"></span><span id="saveStatus">Connecting to the shared canvas…</span></span>
+          <span class="save-state"><span class="save-dot" aria-hidden="true"></span><span id="saveStatus">Connecting to the shared canvas…</span></span>
           <span class="activity-message" id="activityMessage" role="status" aria-live="polite"></span>
           <span class="visitor-count" id="canvasLiveCount" aria-live="polite" aria-label="Live visitor count">Connecting visitors…</span>
         </div>
@@ -668,9 +668,9 @@
         renderCanvasLedger();
         updateHistoryButtons();
 
-        const onlineCountEl = document.getElementById('canvasLiveCount');
+        const onlineCountEl = document.getElementById('onlineCount');
         const liveDot = document.getElementById('liveDot');
-        const onlineStatus = onlineCountEl;
+        const onlineStatus = document.getElementById('onlineStatus');
         const activeNameEl = document.getElementById('activeCanvasName');
         const currentCanvas = canvasList.find(item => item.id === canvasId);
         if (activeNameEl && currentCanvas) activeNameEl.textContent = currentCanvas.name;
@@ -688,7 +688,9 @@
         function updateOnlineCount(includeSelf = false) {
           const state = presence.presenceState() || {};
           const count = Math.max(includeSelf ? 1 : 0, Object.keys(state).length);
-          if (onlineCountEl) onlineCountEl.textContent = count + (count === 1 ? ' visitor online' : ' visitors online');
+          if (onlineCountEl) onlineCountEl.textContent = String(count);
+          const footerCount = document.getElementById('canvasLiveCount');
+          if (footerCount) footerCount.textContent = count + (count === 1 ? ' visitor online' : ' visitors online');
           liveDot?.classList.add('connected');
           liveDot?.classList.remove('offline');
           onlineStatus?.setAttribute('aria-label', count + (count === 1 ? ' person connected to this canvas worldwide' : ' people connected to this canvas worldwide'));
@@ -696,7 +698,9 @@
         function markPresenceOffline(message) {
           liveDot?.classList.remove('connected');
           liveDot?.classList.add('offline');
-          if (onlineCountEl) onlineCountEl.textContent = 'Live count unavailable';
+          if (onlineCountEl) onlineCountEl.textContent = '—';
+          const footerCount = document.getElementById('canvasLiveCount');
+          if (footerCount) footerCount.textContent = 'Live count unavailable';
           onlineStatus?.setAttribute('aria-label', 'Live visitor count unavailable');
           saveStatus.textContent = message;
         }
@@ -1479,6 +1483,7 @@
         } catch (error) {
           console.error('The Daily Canvas could not initialize:', error);
           saveStatus.textContent = 'Could not load the shared canvas · check your connection';
+          document.getElementById('onlineCount').textContent = '—';
           document.getElementById('canvasLiveCount').textContent = 'Live count unavailable';
           document.getElementById('liveDot')?.classList.add('offline');
           const nameEl = document.getElementById('activeCanvasName');
