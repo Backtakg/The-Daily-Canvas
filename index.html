@@ -1197,17 +1197,109 @@
         link.click();
         showToast('Your drawing is ready.');
       });
-      canvas.addEventListener('pointerdown', startDraw);
+      const activePointers = new Map();
+      let touchGesture = null;
+      function gestureMetrics() {
+        const points = [...activePointers.values()];
+        if (points.length < 2) return null;
+        const a = points[0], b = points[1];
+        return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)) };
+      }
+      function beginTouchGesture() {
+        const metrics = gestureMetrics();
+        if (!metrics) return;
+        if (drawing) {
+          drawing = false;
+          currentStroke = null;
+          linePreview = null;
+          lastPoint = null;
+          renderCanvasLedger();
+          updateHistoryButtons();
+        }
+        if (isPanning) {
+          isPanning = false;
+          panPointer = null;
+          panStart = null;
+          canvasFrame.classList.remove('is-panning');
+        }
+        const rect = canvas.getBoundingClientRect();
+        touchGesture = {
+          x: metrics.x, y: metrics.y, distance: metrics.distance, zoom,
+          viewX, viewY,
+          worldX: viewX + (metrics.x - rect.left - rect.width / 2) / zoom,
+          worldY: viewY + (metrics.y - rect.top - rect.height / 2) / zoom
+        };
+        canvasFrame.classList.add('is-panning');
+      }
+      function moveTouchGesture() {
+        const metrics = gestureMetrics();
+        if (!metrics || !touchGesture) return;
+        const rect = canvas.getBoundingClientRect();
+        const nextZoom = Math.max(0.1, Math.min(8, touchGesture.zoom * metrics.distance / touchGesture.distance));
+        viewX = touchGesture.worldX - (metrics.x - rect.left - rect.width / 2) / nextZoom;
+        viewY = touchGesture.worldY - (metrics.y - rect.top - rect.height / 2) / nextZoom;
+        zoom = nextZoom;
+        zoomLevel.textContent = Math.round(zoom * 100) + '%';
+        zoomOutBtn.disabled = zoom <= 0.1;
+        zoomInBtn.disabled = zoom >= 8;
+        applyCanvasView();
+      }
+      canvas.addEventListener('pointerdown', event => {
+        if (event.pointerType === 'touch') {
+          activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          canvas.setPointerCapture?.(event.pointerId);
+          if (activePointers.size >= 2) {
+            event.preventDefault();
+            beginTouchGesture();
+            return;
+          }
+        }
+        if (activePointers.size < 2) startDraw(event);
+      });
       canvas.addEventListener('pointermove', event => {
         sendCursor(event);
-        if (!drawing) return;
+        if (event.pointerType === 'touch' && activePointers.has(event.pointerId)) {
+          activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          if (activePointers.size >= 2) {
+            event.preventDefault();
+            moveTouchGesture();
+            return;
+          }
+        }
+        if (activePointers.size < 2) draw(event);
       });
-      canvas.addEventListener('pointermove', draw);
+      function finishPointer(event) {
+        const wasGesture = activePointers.size >= 2 || !!touchGesture;
+        if (wasGesture) {
+          activePointers.delete(event.pointerId);
+          const remaining = gestureMetrics();
+          if (remaining) {
+            const rect = canvas.getBoundingClientRect();
+            touchGesture = {
+              x: remaining.x, y: remaining.y, distance: remaining.distance, zoom,
+              viewX, viewY,
+              worldX: viewX + (remaining.x - rect.left - rect.width / 2) / zoom,
+              worldY: viewY + (remaining.y - rect.top - rect.height / 2) / zoom
+            };
+          } else {
+            touchGesture = null;
+            canvasFrame.classList.remove('is-panning');
+          }
+          sendCursor(event, false, true);
+          return;
+        }
+        if (event.pointerType === 'touch') activePointers.delete(event.pointerId);
+        if (drawing && (tool === 'line' || tool === 'rectangle' || tool === 'ellipse')) draw(event);
+        endDraw();
+        sendCursor(event, false, true);
+      }
       canvas.addEventListener('pointerleave', event => sendCursor(event, true));
-      canvas.addEventListener('pointerup', event => { if (drawing && (tool === 'line' || tool === 'rectangle' || tool === 'ellipse')) draw(event); endDraw(); sendCursor(event, false, true); });
-      canvas.addEventListener('pointercancel', event => { endDraw(); sendCursor(event, false, true); });
-      canvas.addEventListener('lostpointercapture', event => { endDraw(); sendCursor(event, false, true); });
-      canvas.addEventListener('lostpointercapture', event => { endDraw(); sendCursor(event, false, true); });
+      canvas.addEventListener('pointerup', finishPointer);
+      canvas.addEventListener('pointercancel', finishPointer);
+      canvas.addEventListener('lostpointercapture', event => {
+        if (activePointers.has(event.pointerId)) finishPointer(event);
+        else if (drawing || isPanning) { endDraw(); sendCursor(event, false, true); }
+      });
       window.addEventListener('keydown', event => {
         const tag = event.target.tagName;
         if (shortcutsDialog.open) { if (event.key === 'Escape') shortcutsDialog.close(); return; }
