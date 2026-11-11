@@ -457,6 +457,7 @@
       })());
       let toastTimer = null;
       let cssWidth = 0, cssHeight = 0, pixelRatio = 1;
+      const makeClientId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, char => { const r = Math.random() * 16 | 0; return (char === 'x' ? r : (r & 3 | 8)).toString(16); });
       const sessionId = (() => {
         let id = sessionStorage.getItem('daily-canvas-session');
         if (!id) { id = makeClientId(); sessionStorage.setItem('daily-canvas-session', id); }
@@ -467,7 +468,6 @@
       const remoteCursorElements = new Map();
       let lastCursorSentAt = 0;
       let cursorSendPending = null;
-      const makeClientId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, char => { const r = Math.random() * 16 | 0; return (char === 'x' ? r : (r & 3 | 8)).toString(16); });
       const cursorId = makeClientId();
       setInterval(() => {
         if (!cursorSendPending || !presenceChannel || !sharedReady) return;
