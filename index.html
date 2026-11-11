@@ -377,7 +377,6 @@
         <div class="bottomline">
           <span class="save-state"><span class="save-dot" aria-hidden="true"></span><span id="saveStatus">Connecting to the shared canvas…</span></span>
           <span class="activity-message" id="activityMessage" role="status" aria-live="polite"></span>
-          <span class="visitor-count" id="canvasLiveCount" aria-live="polite" aria-label="Live visitor count">Connecting visitors…</span>
         </div>
       </section>
       <footer><span>One world. Many shared canvases.</span><span>Take your time.</span></footer>
@@ -691,8 +690,6 @@
             total + (Array.isArray(entries) ? entries.length : 0), 0);
           const count = Math.max(includeSelf ? 1 : 0, remoteCount);
           if (onlineCountEl) onlineCountEl.textContent = String(count);
-          const footerCount = document.getElementById('canvasLiveCount');
-          if (footerCount) footerCount.textContent = count + (count === 1 ? ' visitor online' : ' visitors online');
           liveDot?.classList.add('connected');
           liveDot?.classList.remove('offline');
           onlineStatus?.setAttribute('aria-label', count + (count === 1 ? ' person connected to this canvas worldwide' : ' people connected to this canvas worldwide'));
@@ -701,8 +698,6 @@
           liveDot?.classList.remove('connected');
           liveDot?.classList.add('offline');
           if (onlineCountEl) onlineCountEl.textContent = '—';
-          const footerCount = document.getElementById('canvasLiveCount');
-          if (footerCount) footerCount.textContent = 'Live count unavailable';
           onlineStatus?.setAttribute('aria-label', 'Live visitor count unavailable');
           saveStatus.textContent = message;
         }
