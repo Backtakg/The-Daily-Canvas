@@ -248,8 +248,16 @@
         ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, cssWidth, cssHeight);
-        if (preserve && old.width && old.height) ctx.drawImage(old, 0, 0, old.width, old.height, 0, 0, cssWidth, cssHeight);
-        else loadSaved();
+        if (preserve && old.width && old.height) {
+          ctx.drawImage(old, 0, 0, old.width, old.height, 0, 0, cssWidth, cssHeight);
+          // Old undo snapshots use the previous canvas dimensions.
+          // Start a fresh history at the new size to keep undo reliable.
+          history = [];
+          historyIndex = -1;
+          pushHistory();
+        } else {
+          loadSaved();
+        }
       }
 
       function snapshot() {
