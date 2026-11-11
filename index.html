@@ -1207,7 +1207,7 @@
         localStorage.setItem('daily-canvas-active', activeCanvasId);
         const url = new URL(location.href);
         url.searchParams.set('canvas', activeCanvasId);
-        history.replaceState({}, '', url);
+        window.history.replaceState({}, '', url);
       }
       async function switchCanvas(id) {
         if (!canvasList.some(item => item.id === id) || id === activeCanvasId) return;
