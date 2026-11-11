@@ -81,7 +81,11 @@
     canvas { display:block; width:100%; height:min(61vh, 620px); min-height:340px; background:#fff; touch-action:none; cursor:crosshair; }
     .remote-cursors { position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:3; }
     .remote-cursor { position:absolute; left:0; top:0; transform:translate(-2px,-2px); transition:left .045s linear, top .045s linear; will-change:left,top; }
-    .remote-cursor-mark { width:13px; height:13px; border:2px solid var(--cursor-color); border-radius:50% 50% 50% 2px; background:rgba(255,255,255,.82); transform:rotate(-45deg); box-shadow:0 1px 4px rgba(0,0,0,.16); }
+    .remote-cursor-mark { position:relative; width:13px; height:13px; border:2px solid var(--cursor-color); border-radius:50% 50% 50% 2px; background:rgba(255,255,255,.82); transform:rotate(-45deg); box-shadow:0 1px 4px rgba(0,0,0,.16); transition:transform .16s ease, box-shadow .16s ease; }
+    .remote-cursor.is-drawing .remote-cursor-mark { transform:rotate(-45deg) scale(.82); box-shadow:0 0 0 3px color-mix(in srgb, var(--cursor-color) 18%, transparent), 0 1px 4px rgba(0,0,0,.16); }
+    .remote-cursor.is-drawing .remote-cursor-mark::after { content:""; position:absolute; inset:-7px; border:1.5px solid var(--cursor-color); border-radius:50%; animation:cursor-draw-pulse 1.15s ease-out infinite; }
+    @keyframes cursor-draw-pulse { 0% { transform:scale(.55); opacity:.75; } 100% { transform:scale(1.65); opacity:0; } }
+    @media (prefers-reduced-motion:reduce) { .remote-cursor, .remote-cursor-mark { transition:none; } .remote-cursor.is-drawing .remote-cursor-mark::after { animation:none; opacity:.45; } }
     .remote-cursor-label { position:absolute; left:12px; top:10px; padding:3px 7px; border-radius:5px; background:var(--cursor-color); color:#fff; font-size:9px; letter-spacing:.04em; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.1); }
     .canvas-hint { position:absolute; bottom:13px; right:15px; pointer-events:none; color:#c3c1ba; font-size:10px; letter-spacing:.04em; }
     .bottomline { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:12px 17px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }
@@ -414,6 +418,7 @@
         }
         cursor.style.left = (data.x * layer.clientWidth) + 'px';
         cursor.style.top = (data.y * layer.clientHeight) + 'px';
+        cursor.classList.toggle('is-drawing', data.drawing === true);
         clearTimeout(cursor._removeTimer);
         cursor._removeTimer = setTimeout(() => removeRemoteCursor(data.id), 4500);
       }
@@ -429,7 +434,7 @@
         cursor.remove();
         remoteCursorElements.delete(id);
       }
-      function sendCursor(event, hidden = false) {
+      function sendCursor(event, hidden = false, force = false) {
         if (!presenceChannel || !sharedReady) return;
         if (hidden) cursorSendPending = null;
         const now = performance.now();
@@ -438,9 +443,9 @@
           const rect = canvas.getBoundingClientRect();
           const x = hidden ? 0 : Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
           const y = hidden ? 0 : Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-          presenceChannel.send({ type: 'broadcast', event: 'cursor', payload: { id: cursorId, x, y, hidden } }).catch(() => {});
+          presenceChannel.send({ type: 'broadcast', event: 'cursor', payload: { id: cursorId, x, y, hidden, drawing: drawing && !hidden } }).catch(() => {});
         };
-        if (hidden || now - lastCursorSentAt >= 65) { lastCursorSentAt = now; send(); }
+        if (hidden || force || now - lastCursorSentAt >= 65) { lastCursorSentAt = now; send(); }
         else { cursorSendPending = event; }
       }
       function setTool(next) {
@@ -457,6 +462,7 @@
         if (event.button !== undefined && event.button !== 0) return;
         event.preventDefault();
         drawing = true;
+        sendCursor(event, false, true);
         canvas.setPointerCapture?.(event.pointerId);
         lastPoint = pointFromEvent(event);
         const strokeColor = tool === 'eraser' ? '#ffffff' : color;
@@ -552,9 +558,9 @@
       });
       canvas.addEventListener('pointermove', draw);
       canvas.addEventListener('pointerleave', event => sendCursor(event, true));
-      canvas.addEventListener('pointerup', endDraw);
-      canvas.addEventListener('pointercancel', endDraw);
-      canvas.addEventListener('lostpointercapture', endDraw);
+      canvas.addEventListener('pointerup', event => { endDraw(); sendCursor(event, false, true); });
+      canvas.addEventListener('pointercancel', event => { endDraw(); sendCursor(event, false, true); });
+      canvas.addEventListener('lostpointercapture', event => { endDraw(); sendCursor(event, false, true); });
       window.addEventListener('keydown', event => {
         const tag = event.target.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
