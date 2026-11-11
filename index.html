@@ -373,9 +373,8 @@
           old.width = canvas.width; old.height = canvas.height;
           old.getContext('2d').drawImage(canvas, 0, 0);
         }
-        const rect = canvas.getBoundingClientRect();
-        cssWidth = Math.max(1, rect.width);
-        cssHeight = Math.max(1, rect.height);
+        cssWidth = Math.max(1, canvasFrame.clientWidth);
+        cssHeight = Math.max(1, canvasFrame.clientHeight);
         pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
         canvas.width = Math.round(cssWidth * pixelRatio);
         canvas.height = Math.round(cssHeight * pixelRatio);
