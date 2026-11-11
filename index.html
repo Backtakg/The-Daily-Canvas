@@ -961,7 +961,7 @@
         if (!drawing) return;
         event.preventDefault();
         const p = pointFromEvent(event);
-        if (tool === 'line' || tool === 'rectangle') {
+        if (tool === 'line' || tool === 'rectangle' || tool === 'ellipse') {
           ctx.save();
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1125,7 +1125,7 @@
         canvasSelect.replaceChildren(...canvasList.map(item => new Option(item.name, item.id)));
         canvasSelect.value = activeCanvasId;
         const active = canvasList.find(item => item.id === activeCanvasId);
-        if (activeNameEl) activeNameEl.textContent = active ? active.name : 'Untitled canvas';
+        if (activeNameEl) activeNameEl.textContent = active ? active.name : 'Canvas';
       }
       function updateCanvasAddress() {
         localStorage.setItem('daily-canvas-active', activeCanvasId);
@@ -1142,7 +1142,7 @@
         showToast('Switched canvas.');
       }
       async function createCanvas() {
-        const suggested = 'Untitled canvas';
+        const suggested = 'New canvas';
         const name = (prompt('Name your new canvas:', suggested) || '').trim();
         if (!name) return;
         if (name.length > 48) { showToast('Canvas names can be up to 48 characters.'); return; }
