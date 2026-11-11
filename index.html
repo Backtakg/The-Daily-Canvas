@@ -327,7 +327,7 @@
         <div class="bottomline">
           <span class="save-state"><span class="save-dot"></span><span id="saveStatus">Connecting to the shared canvas…</span></span>
           <span class="activity-message" id="activityMessage" role="status" aria-live="polite"></span>
-          <span>Shared live with everyone, everywhere.</span>
+          <span id="canvasLiveCount" aria-live="polite">Waiting for visitors…</span>
         </div>
       </section>
       <footer><span>One world. Many shared canvases.</span><span>Take your time.</span></footer>
@@ -586,11 +586,13 @@
           showRemoteCursor(data);
         });
         const onlineCount = document.getElementById('onlineCount');
+        const canvasLiveCount = document.getElementById('canvasLiveCount');
         const liveDot = document.getElementById('liveDot');
         function updateOnlineCount() {
           const state = channel.presenceState();
-          const count = Object.keys(state).length;
+          const count = Object.values(state).reduce((total, presences) => total + presences.length, 0);
           onlineCount.textContent = String(count);
+          if (canvasLiveCount) canvasLiveCount.textContent = count + (count === 1 ? ' person here now' : ' people here now');
           liveDot.classList.add('connected');
           liveDot.classList.remove('offline');
         }
@@ -615,6 +617,7 @@
             liveDot.classList.remove('connected');
             liveDot.classList.add('offline');
             onlineCount.textContent = '—';
+            if (canvasLiveCount) canvasLiveCount.textContent = 'Live connection unavailable';
           }
           if (status !== 'SUBSCRIBED' || sharedReady) return;
           try {
@@ -1326,10 +1329,14 @@
 
       setCanvasSize(false);
       updateHistoryButtons();
-      refreshCanvasList().then(() => {
-        updateCanvasAddress();
-        connectSharedCanvas(activeCanvasId);
+      updateCanvasAddress();
+      connectSharedCanvas(activeCanvasId).catch(error => {
+        console.error('Could not start shared canvas:', error);
+        saveStatus.textContent = 'Could not connect · refresh to retry';
+        document.getElementById('onlineCount').textContent = '—';
+        document.getElementById('canvasLiveCount').textContent = 'Live connection unavailable';
       });
+      refreshCanvasList().catch(error => console.error('Could not refresh canvas list:', error));
       if ('ResizeObserver' in window) {
         let resizeTimer;
         new ResizeObserver(() => {
