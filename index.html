@@ -88,6 +88,14 @@
     #undoBtn, #redoBtn { display:none; }
     .action-btn.primary { background:var(--accent); color:white; padding:0 14px; }
     .action-btn.primary:hover { background:#41433b; }
+    .palette-maker { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:12px 15px; border-bottom:1px solid var(--line); background:#fffefa; }
+    .palette-maker-title { color:var(--muted); font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
+    .palette-maker select { height:32px; border:1px solid var(--line); border-radius:8px; padding:0 9px; color:#66665e; background:#fffefa; font:inherit; font-size:11px; }
+    .palette-generated { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .generated-swatch { display:flex; align-items:center; gap:5px; border:1px solid var(--line); border-radius:20px; padding:4px 8px 4px 4px; background:transparent; cursor:pointer; color:#66665e; font:10px ui-monospace, monospace; }
+    .generated-swatch:hover { background:#f2f0e9; }
+    .generated-swatch-dot { width:20px; height:20px; border-radius:50%; box-shadow:0 0 0 1px #0001; }
+    .palette-maker .action-btn { height:32px; border:1px solid var(--line); }
     .canvas-wrap { padding:17px; background:#f0eee7; transition:background .2s ease; }
     .canvas-wrap[data-surface="sage"] { background:#e7ede5; }
     .canvas-wrap[data-surface="sand"] { background:#eee4d6; }
@@ -244,6 +252,14 @@
             <button class="action-btn primary" id="saveBtn" title="Save drawing as PNG"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v3h14v-3"/></svg><span class="tool-label">Save</span></button>
           </div>
         </div>
+        <div class="palette-maker" aria-label="Color palette generator">
+          <span class="palette-maker-title">Color harmony</span>
+          <select id="paletteHarmony" aria-label="Choose color harmony">
+            <option value="analogous">Analogous</option><option value="complementary">Complementary</option><option value="triadic">Triadic</option><option value="split">Split complementary</option><option value="tetradic">Tetradic</option>
+          </select>
+          <button class="action-btn" id="generatePaletteBtn" type="button">Generate palette ↗</button>
+          <div class="palette-generated" id="generatedPalette" aria-live="polite"></div>
+        </div>
         <div class="canvas-wrap">
           <div class="canvas-frame">
             <div class="canvas-world" id="canvasWorld">
@@ -306,6 +322,8 @@
       const panModeBtn = document.getElementById('panModeBtn');
       const studio = document.querySelector('.studio');
       const saveStatus = document.getElementById('saveStatus');
+      const paletteHarmony = document.getElementById('paletteHarmony');
+      const generatedPalette = document.getElementById('generatedPalette');
       let color = '#292b25';
       let shapeFillColor = '#e47762';
       let size = 5;
@@ -802,10 +820,39 @@
           setTool('brush');
         });
       });
+      function hexToHsl(hex) {
+        const value = hex.replace('#', '');
+        const r = parseInt(value.slice(0,2),16)/255, g = parseInt(value.slice(2,4),16)/255, b = parseInt(value.slice(4,6),16)/255;
+        const max=Math.max(r,g,b), min=Math.min(r,g,b), delta=max-min;
+        let h=0,s=0; const l=(max+min)/2;
+        if(delta){s=delta/(1-Math.abs(2*l-1));if(max===r)h=60*(((g-b)/delta)%6);else if(max===g)h=60*((b-r)/delta+2);else h=60*((r-g)/delta+4);}
+        return {h:(h+360)%360,s:s*100,l:l*100};
+      }
+      function hslToHex(h,s,l) {
+        h=((h%360)+360)%360;s/=100;l/=100;
+        const chroma=(1-Math.abs(2*l-1))*s,x=chroma*(1-Math.abs((h/60)%2-1)),m=l-chroma/2;
+        const rgb=h<60?[chroma,x,0]:h<120?[x,chroma,0]:h<180?[0,chroma,x]:h<240?[0,x,chroma]:h<300?[x,0,chroma]:[chroma,0,x];
+        return '#'+rgb.map(v=>Math.round((v+m)*255).toString(16).padStart(2,'0')).join('');
+      }
+      function generatePalette() {
+        const base=hexToHsl(color);
+        const offsets={analogous:[-40,-20,0,20,40],complementary:[0,180,160,200,20],triadic:[0,120,240,30,210],split:[0,150,210,30,330],tetradic:[0,90,180,270,45]}[paletteHarmony.value]||[-40,-20,0,20,40];
+        generatedPalette.replaceChildren();
+        offsets.forEach((offset,index)=>{
+          const hex=hslToHex(base.h+offset,Math.max(25,base.s),Math.max(28,Math.min(76,base.l+(index-2)*5)));
+          const button=document.createElement('button');button.type='button';button.className='generated-swatch';button.title='Use '+hex+' as brush color';
+          const dot=document.createElement('span');dot.className='generated-swatch-dot';dot.style.backgroundColor=hex;
+          const label=document.createElement('span');label.textContent=hex.toUpperCase();button.append(dot,label);
+          button.addEventListener('click',()=>{color=hex;document.getElementById('customColor').value=hex;document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));setTool('brush');showToast(hex.toUpperCase()+' selected.');});
+          generatedPalette.append(button);
+        });
+      }
+      document.getElementById('generatePaletteBtn').addEventListener('click',generatePalette);
       document.getElementById('customColor').addEventListener('input', event => {
         color = event.target.value;
         document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
         setTool('brush');
+        generatePalette();
       });
       const shapeFillInput = document.getElementById('shapeFillColor');
       const savedShapeFill = localStorage.getItem('daily-canvas-fill-color');
@@ -816,6 +863,7 @@
         localStorage.setItem('daily-canvas-fill-color', shapeFillColor);
         showToast('Filled shape color updated.');
       });
+      generatePalette();
       sizeInput.addEventListener('input', () => {
         size = Number(sizeInput.value);
         sizeValue.textContent = size;
