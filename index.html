@@ -307,7 +307,8 @@
           <select id="canvasSelect" aria-label="Choose a canvas"><option value="">Loading canvases…</option></select>
           <span class="manager-spacer"></span>
           <button id="renameCanvasBtn" type="button" title="Rename this canvas">Rename</button>
-          <button id="newCanvasBtn" type="button" title="Create another shared canvas">+ New</button>
+          <button id="newPrivateCanvasBtn" type="button" title="Create a private canvas saved only on this device">+ Private</button>
+          <button id="newCanvasBtn" type="button" title="Create another shared canvas">+ Shared</button>
         </div>
         <div class="toolbar" role="toolbar" aria-label="Drawing tools">
           <div class="tool-group">
@@ -428,6 +429,19 @@
       let sharedChannel = null;
       let channelSwitchToken = 0;
       let canvasList = [];
+      const PRIVATE_PREFIX = 'private:';
+      const PRIVATE_STORAGE_KEY = 'daily-canvas-private-canvases';
+      function readPrivateCanvases() {
+        try {
+          const value = JSON.parse(localStorage.getItem(PRIVATE_STORAGE_KEY) || '[]');
+          return Array.isArray(value) ? value.filter(item => item && typeof item.id === 'string' && item.id.startsWith(PRIVATE_PREFIX) && typeof item.name === 'string' && Array.isArray(item.strokes)) : [];
+        } catch (error) { console.warn('Could not read private canvases:', error); return []; }
+      }
+      function writePrivateCanvases(items) {
+        try { localStorage.setItem(PRIVATE_STORAGE_KEY, JSON.stringify(items)); return true; }
+        catch (error) { console.error('Could not save private canvas:', error); showToast('Device storage is full. Export your artwork before continuing.'); return false; }
+      }
+      function isPrivateCanvas(id = activeCanvasId) { return String(id).startsWith(PRIVATE_PREFIX); }
       const zoomLevel = document.getElementById('zoomLevel');
       const zoomOutBtn = document.getElementById('zoomOutBtn');
       const zoomInBtn = document.getElementById('zoomInBtn');
@@ -1131,8 +1145,21 @@
           return;
         }
         saveStatus.textContent = 'Sharing your stroke…';
-        const localStrokeId = 'local-' + makeClientId();
+        const localStrokeId = (isPrivateCanvas() ? 'private-stroke-' : 'local-') + makeClientId();
         canvasStrokes.push({ id: localStrokeId, session_id: sessionId, canvas_id: activeCanvasId, payload: completed });
+        if (isPrivateCanvas()) {
+          const privateCanvases = readPrivateCanvases();
+          const current = privateCanvases.find(item => item.id === activeCanvasId);
+          if (!current) { canvasStrokes.pop(); showToast('This private canvas is unavailable.'); return; }
+          current.strokes.push({ id: localStrokeId, session_id: sessionId, canvas_id: activeCanvasId, payload: completed });
+          if (!writePrivateCanvases(privateCanvases)) { current.strokes.pop(); canvasStrokes.pop(); renderCanvasLedger(); return; }
+          undoStack.push(localStrokeId);
+          redoStack.length = 0;
+          renderCanvasLedger();
+          updateHistoryButtons();
+          saveStatus.textContent = 'Private · saved on this device only';
+          return;
+        }
         undoStack.push(localStrokeId);
         redoStack.length = 0;
         renderCanvasLedger();
@@ -1187,15 +1214,20 @@
           throw error;
         }
         canvasList = data || [];
-        if (!canvasList.length) {
+        const privateCanvases = readPrivateCanvases();
+        const options = [
+          ...canvasList.map(item => new Option(item.name + ' · Shared', item.id)),
+          ...privateCanvases.map(item => new Option(item.name + ' · Private', item.id))
+        ];
+        if (!options.length) {
           if (activeNameEl) activeNameEl.textContent = 'No canvases yet';
           canvasSelect.replaceChildren(new Option('No canvases found', ''));
           return;
         }
-        if (!canvasList.some(item => item.id === activeCanvasId)) activeCanvasId = canvasList[0].id;
-        canvasSelect.replaceChildren(...canvasList.map(item => new Option(item.name, item.id)));
+        if (!options.some(option => option.value === activeCanvasId)) activeCanvasId = options[0].value;
+        canvasSelect.replaceChildren(...options);
         canvasSelect.value = activeCanvasId;
-        const active = canvasList.find(item => item.id === activeCanvasId);
+        const active = canvasList.find(item => item.id === activeCanvasId) || privateCanvases.find(item => item.id === activeCanvasId);
         if (activeNameEl) activeNameEl.textContent = active ? active.name : 'Canvas';
       }
       function updateCanvasAddress() {
@@ -1205,12 +1237,51 @@
         window.history.replaceState({}, '', url);
       }
       async function switchCanvas(id) {
-        if (!canvasList.some(item => item.id === id) || id === activeCanvasId) return;
+        const privateCanvases = readPrivateCanvases();
+        if ((!canvasList.some(item => item.id === id) && !privateCanvases.some(item => item.id === id)) || id === activeCanvasId) return;
         activeCanvasId = id;
         canvasSelect.value = id;
         updateCanvasAddress();
-        await connectSharedCanvas(id);
-        showToast('Switched canvas.');
+        if (isPrivateCanvas(id)) {
+          const switchToken = ++channelSwitchToken;
+          sharedReady = false;
+          const oldChannels = [...new Set([sharedChannel, presenceChannel].filter(Boolean))];
+          sharedChannel = null; presenceChannel = null;
+          if (oldChannels.length) await Promise.all(oldChannels.map(channel => supabase.removeChannel(channel)));
+          if (switchToken !== channelSwitchToken) return;
+          canvasStrokes.length = 0; undoStack.length = 0; redoStack.length = 0;
+          pendingEvents.length = 0; lastEventId = 0;
+          remoteCursorElements.forEach(cursor => cursor.remove()); remoteCursorElements.clear();
+          const current = readPrivateCanvases().find(item => item.id === id);
+          if (!current) { showToast('Private canvas not found on this device.'); return; }
+          canvasStrokes.push(...current.strokes);
+          const ownRows = current.strokes.filter(row => row.session_id === sessionId);
+          undoStack.push(...ownRows.filter(row => !hiddenStrokeIds.has(String(row.id))).map(row => row.id));
+          redoStack.push(...ownRows.filter(row => hiddenStrokeIds.has(String(row.id))).map(row => row.id).reverse());
+          sharedReady = true;
+          renderCanvasLedger(); updateHistoryButtons();
+          const activeNameEl = document.getElementById('activeCanvasName');
+          if (activeNameEl) activeNameEl.textContent = current.name;
+          document.getElementById('onlineCount').textContent = '—';
+          document.getElementById('liveDot')?.classList.remove('connected');
+          document.getElementById('liveDot')?.classList.add('offline');
+          document.getElementById('onlineStatus')?.setAttribute('aria-label', 'Private canvas · not shared');
+          saveStatus.textContent = 'Private · saved on this device only';
+        } else {
+          await connectSharedCanvas(id);
+        }
+        showToast(isPrivateCanvas(id) ? 'Private canvas opened.' : 'Switched to shared canvas.');
+      }
+      async function createPrivateCanvas() {
+        const name = (prompt('Name your private canvas:', 'My private canvas') || '').trim();
+        if (!name) return;
+        if (name.length > 48) { showToast('Canvas names can be up to 48 characters.'); return; }
+        const items = readPrivateCanvases();
+        const item = { id: PRIVATE_PREFIX + makeClientId(), name, created_at: new Date().toISOString(), strokes: [] };
+        if (!writePrivateCanvases([...items, item])) return;
+        await refreshCanvasList();
+        await switchCanvas(item.id);
+        showToast('Private canvas created on this device.');
       }
       async function createCanvas() {
         const suggested = 'New canvas';
@@ -1224,18 +1295,25 @@
         showToast('New shared canvas created.');
       }
       async function renameCanvas() {
-        const current = canvasList.find(item => item.id === activeCanvasId);
+        const privateItems = readPrivateCanvases();
+        const current = privateItems.find(item => item.id === activeCanvasId) || canvasList.find(item => item.id === activeCanvasId);
         if (!current) return;
         const name = (prompt('Rename this canvas:', current.name) || '').trim();
         if (!name || name === current.name) return;
         if (name.length > 48) { showToast('Canvas names can be up to 48 characters.'); return; }
-        const { error } = await supabase.from('canvases').update({ name }).eq('id', activeCanvasId);
-        if (error) { console.error('Could not rename canvas:', error); showToast('Could not rename canvas. Please try again.'); return; }
+        if (isPrivateCanvas()) {
+          current.name = name;
+          if (!writePrivateCanvases(privateItems)) return;
+        } else {
+          const { error } = await supabase.from('canvases').update({ name }).eq('id', activeCanvasId);
+          if (error) { console.error('Could not rename canvas:', error); showToast('Could not rename canvas. Please try again.'); return; }
+        }
         await refreshCanvasList();
         showToast('Canvas renamed.');
       }
       canvasSelect.addEventListener('change', () => switchCanvas(canvasSelect.value));
       document.getElementById('newCanvasBtn').addEventListener('click', createCanvas);
+      document.getElementById('newPrivateCanvasBtn').addEventListener('click', createPrivateCanvas);
       document.getElementById('renameCanvasBtn').addEventListener('click', renameCanvas);
 
       undoBtn.title = 'Undo your last stroke (Ctrl/⌘ Z)';
@@ -1474,7 +1552,8 @@
         try {
           await refreshCanvasList();
           updateCanvasAddress();
-          await connectSharedCanvas(activeCanvasId);
+          if (isPrivateCanvas(activeCanvasId)) await switchCanvas(activeCanvasId);
+          else await connectSharedCanvas(activeCanvasId);
         } catch (error) {
           console.error('The Daily Canvas could not initialize:', error);
           saveStatus.textContent = 'Could not load the shared canvas · check your connection';
