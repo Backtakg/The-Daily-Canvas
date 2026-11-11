@@ -86,7 +86,7 @@
     .canvas-wrap { padding:17px; background:#f0eee7; transition:background .2s ease; }
     .canvas-wrap[data-surface="sage"] { background:#e7ede5; }
     .canvas-wrap[data-surface="sand"] { background:#eee4d6; }
-    .canvas-wrap[data-surface=" dusk"] { background:#e5e5e9; }
+    .canvas-wrap[data-surface="dusk"] { background:#e5e5e9; }
     .surface-control { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; }
     .surface-control select { max-width:112px; height:32px; padding:0 8px; border:1px solid var(--line); border-radius:8px; color:#66665e; background:rgba(255,254,250,.8); font:inherit; cursor:pointer; }
     .surface-control select:focus-visible { outline:2px solid #8d9e89; outline-offset:2px; }
@@ -197,7 +197,8 @@
             <button class="action-btn" id="redoBtn" title="Redo is unavailable on the shared canvas" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h1"/></svg></button>
             <button class="action-btn" id="gridBtn" type="button" aria-pressed="false" title="Toggle drawing guide grid" aria-label="Toggle drawing guide grid"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18m6-18v18"/></svg><span class="tool-label">Grid</span></button>
             <button class="action-btn" id="focusModeBtn" type="button" aria-pressed="false" title="Enter focus mode (F)"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg><span class="tool-label">Focus</span></button>
-            <button class="action-btn" id="shareBtn" type="button" title="Copy a link to invite someone"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.1 0l-3 3A5 5 0 0 0 11 21.1l1.7-1.7"/></svg><span class="tool-label">Invite</span></button>\n            <button class="action-btn primary" id="saveBtn" title="Save drawing as PNG"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v3h14v-3"/></svg><span class="tool-label">Save</span></button>
+            <button class="action-btn" id="shareBtn" type="button" title="Copy a link to invite someone"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.1 0l-3 3A5 5 0 0 0 11 21.1l1.7-1.7"/></svg><span class="tool-label">Invite</span></button>
+            <button class="action-btn primary" id="saveBtn" title="Save drawing as PNG"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v3h14v-3"/></svg><span class="tool-label">Save</span></button>
           </div>
         </div>
         <div class="canvas-wrap">
