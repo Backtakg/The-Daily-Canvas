@@ -1330,13 +1330,19 @@
       setCanvasSize(false);
       updateHistoryButtons();
       updateCanvasAddress();
+      const initiallyConnectedCanvas = activeCanvasId;
       connectSharedCanvas(activeCanvasId).catch(error => {
         console.error('Could not start shared canvas:', error);
         saveStatus.textContent = 'Could not connect · refresh to retry';
         document.getElementById('onlineCount').textContent = '—';
         document.getElementById('canvasLiveCount').textContent = 'Live connection unavailable';
       });
-      refreshCanvasList().catch(error => console.error('Could not refresh canvas list:', error));
+      refreshCanvasList().then(() => {
+        if (activeCanvasId !== initiallyConnectedCanvas) {
+          updateCanvasAddress();
+          connectSharedCanvas(activeCanvasId).catch(error => console.error('Could not connect to selected canvas:', error));
+        }
+      }).catch(error => console.error('Could not refresh canvas list:', error));
       if ('ResizeObserver' in window) {
         let resizeTimer;
         new ResizeObserver(() => {
