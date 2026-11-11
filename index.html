@@ -83,7 +83,13 @@
     #undoBtn, #redoBtn { display:none; }
     .action-btn.primary { background:var(--accent); color:white; padding:0 14px; }
     .action-btn.primary:hover { background:#41433b; }
-    .canvas-wrap { padding:17px; background:#f0eee7; }
+    .canvas-wrap { padding:17px; background:#f0eee7; transition:background .2s ease; }
+    .canvas-wrap[data-surface="sage"] { background:#e7ede5; }
+    .canvas-wrap[data-surface="sand"] { background:#eee4d6; }
+    .canvas-wrap[data-surface=" dusk"] { background:#e5e5e9; }
+    .surface-control { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; }
+    .surface-control select { max-width:112px; height:32px; padding:0 8px; border:1px solid var(--line); border-radius:8px; color:#66665e; background:rgba(255,254,250,.8); font:inherit; cursor:pointer; }
+    .surface-control select:focus-visible { outline:2px solid #8d9e89; outline-offset:2px; }
     .canvas-frame { position:relative; overflow:hidden; border-radius:10px; background:white; box-shadow:0 2px 8px rgba(0,0,0,.045); }
     .canvas-grid { display:none; position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.22; background-image:radial-gradient(#85857c .8px, transparent .8px); background-size:22px 22px; }
     .canvas-frame.grid-visible .canvas-grid { display:block; }
@@ -184,6 +190,7 @@
           </div>
           <span class="separator"></span>
           <label class="size-wrap" for="brushSize"><span>Size</span><input id="brushSize" type="range" min="1" max="40" value="5"><span class="size-value" id="sizeValue">5</span></label>
+          <label class="surface-control" for="surfaceSelect"><span>Studio</span><select id="surfaceSelect" aria-label="Choose studio background"><option value="stone">Stone</option><option value="sage">Sage</option><option value="sand">Sand</option><option value="dusk">Mist</option></select></label>
           <span class="toolbar-spacer"></span>
           <div class="tool-group">
             <button class="action-btn" id="undoBtn" title="Undo is unavailable on the shared canvas" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg></button>
@@ -623,6 +630,21 @@
           showToast('Could not copy the link. Please copy the page address.');
         }
       });
+      const canvasWrap = document.querySelector('.canvas-wrap');
+      const surfaceSelect = document.getElementById('surfaceSelect');
+      const savedSurface = localStorage.getItem('daily-canvas-surface');
+      if (['stone', 'sage', 'sand', 'dusk'].includes(savedSurface)) {
+        surfaceSelect.value = savedSurface;
+      }
+      function applySurface() {
+        canvasWrap.dataset.surface = surfaceSelect.value;
+        localStorage.setItem('daily-canvas-surface', surfaceSelect.value);
+      }
+      surfaceSelect.addEventListener('change', () => {
+        applySurface();
+        showToast('Studio background updated — only you can see this.');
+      });
+      applySurface();
       document.getElementById('saveBtn').addEventListener('click', () => {
         const link = document.createElement('a');
         link.download = 'my-daily-canvas.png';
