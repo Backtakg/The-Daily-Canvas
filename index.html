@@ -735,6 +735,13 @@
             y > 0 ? index - gridW : -1, y < gridH - 1 ? index + gridW : -1];
           for (const next of neighbors) if (next >= 0 && matches(next)) { seen[next] = 1; queue[tail++] = next; }
         }
+        // Refuse large/open regions: a bucket click outside a closed outline
+        // must never flood the entire shared canvas.
+        const filledRatio = tail / (gridW * gridH);
+        if (filledRatio > 0.42) {
+          showToast('No closed boundary found — tap inside a smaller enclosed area.');
+          return;
+        }
         const points = [];
         for (let y = 0; y < gridH; y++) {
           let left = gridW, right = -1;
