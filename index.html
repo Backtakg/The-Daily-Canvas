@@ -1238,7 +1238,7 @@
       }
       async function switchCanvas(id) {
         const privateCanvases = readPrivateCanvases();
-        if ((!canvasList.some(item => item.id === id) && !privateCanvases.some(item => item.id === id)) || id === activeCanvasId) return;
+        if ((!canvasList.some(item => item.id === id) && !privateCanvases.some(item => item.id === id)) || (id === activeCanvasId && (!isPrivateCanvas(id) || sharedReady))) return;
         activeCanvasId = id;
         canvasSelect.value = id;
         updateCanvasAddress();
@@ -1389,6 +1389,7 @@
         if (event.target === shortcutsDialog) shortcutsDialog.close();
       });
       document.getElementById('shareBtn').addEventListener('click', async () => {
+        if (isPrivateCanvas()) { showToast('Private canvases cannot be shared.'); return; }
         const inviteUrl = new URL(window.location.href);
         inviteUrl.searchParams.set('canvas', activeCanvasId);
         try {
