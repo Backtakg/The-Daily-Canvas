@@ -35,7 +35,7 @@
     .live-dot { width:7px; height:7px; border-radius:50%; background:#aeb3a8; box-shadow:0 0 0 3px rgba(174,179,168,.14); }
     .live-dot.connected { background:#83a98a; box-shadow:0 0 0 3px rgba(131,169,138,.16); }
     .live-dot.offline { background:#c88b7e; box-shadow:0 0 0 3px rgba(200,139,126,.14); }
-    #onlineCount { color:var(--ink); font-weight:650; font-variant-numeric:tabular-nums; }
+    .visitor-count { color:var(--muted); font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; }
     main { padding: 28px 0 54px; }
     .intro { display:flex; align-items:end; justify-content:space-between; gap:20px; margin: 0 0 22px; }
     .eyebrow { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.17em; margin:0 0 10px; }
@@ -375,9 +375,9 @@
           </div>
         </div>
         <div class="bottomline">
-          <span class="save-state"><span class="save-dot"></span><span id="saveStatus">Connecting to the shared canvas…</span></span>
+          <span class="save-state"><span class="save-dot" id="liveDot" aria-hidden="true"></span><span id="saveStatus">Connecting to the shared canvas…</span></span>
           <span class="activity-message" id="activityMessage" role="status" aria-live="polite"></span>
-          <span id="canvasLiveCount" aria-live="polite">Waiting for visitors…</span>
+          <span class="visitor-count" id="canvasLiveCount" aria-live="polite" aria-label="Live visitor count">Connecting visitors…</span>
         </div>
       </section>
       <footer><span>One world. Many shared canvases.</span><span>Take your time.</span></footer>
@@ -668,9 +668,9 @@
         renderCanvasLedger();
         updateHistoryButtons();
 
-        const onlineCountEl = document.getElementById('onlineCount');
+        const onlineCountEl = document.getElementById('canvasLiveCount');
         const liveDot = document.getElementById('liveDot');
-        const onlineStatus = document.getElementById('onlineStatus');
+        const onlineStatus = onlineCountEl;
         const activeNameEl = document.getElementById('activeCanvasName');
         const currentCanvas = canvasList.find(item => item.id === canvasId);
         if (activeNameEl && currentCanvas) activeNameEl.textContent = currentCanvas.name;
@@ -688,15 +688,15 @@
         function updateOnlineCount(includeSelf = false) {
           const state = presence.presenceState() || {};
           const count = Math.max(includeSelf ? 1 : 0, Object.keys(state).length);
-          onlineCountEl.textContent = String(count);
-          liveDot.classList.add('connected');
-          liveDot.classList.remove('offline');
+          if (onlineCountEl) onlineCountEl.textContent = count + (count === 1 ? ' visitor online' : ' visitors online');
+          liveDot?.classList.add('connected');
+          liveDot?.classList.remove('offline');
           onlineStatus?.setAttribute('aria-label', count + (count === 1 ? ' person connected to this canvas worldwide' : ' people connected to this canvas worldwide'));
         }
         function markPresenceOffline(message) {
-          liveDot.classList.remove('connected');
-          liveDot.classList.add('offline');
-          onlineCountEl.textContent = '—';
+          liveDot?.classList.remove('connected');
+          liveDot?.classList.add('offline');
+          if (onlineCountEl) onlineCountEl.textContent = 'Live count unavailable';
           onlineStatus?.setAttribute('aria-label', 'Live visitor count unavailable');
           saveStatus.textContent = message;
         }
@@ -1479,8 +1479,8 @@
         } catch (error) {
           console.error('The Daily Canvas could not initialize:', error);
           saveStatus.textContent = 'Could not load the shared canvas · check your connection';
-          document.getElementById('onlineCount').textContent = '—';
-          document.getElementById('liveDot').classList.add('offline');
+          document.getElementById('canvasLiveCount').textContent = 'Live count unavailable';
+          document.getElementById('liveDot')?.classList.add('offline');
           const nameEl = document.getElementById('activeCanvasName');
           if (nameEl && nameEl.textContent === 'Loading canvas…') nameEl.textContent = 'Canvas unavailable';
         }
