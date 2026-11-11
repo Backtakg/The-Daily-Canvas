@@ -93,6 +93,8 @@
     .canvas-frame { position:relative; overflow:hidden; border-radius:10px; background:white; box-shadow:0 2px 8px rgba(0,0,0,.045); }
     .canvas-grid { display:none; position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.22; background-image:radial-gradient(#85857c .8px, transparent .8px); background-size:22px 22px; }
     .canvas-frame.grid-visible .canvas-grid { display:block; }
+    .symmetry-guide { display:none; position:absolute; z-index:2; top:0; bottom:0; left:50%; border-left:1px dashed rgba(75,85,72,.42); pointer-events:none; }
+    .canvas-frame.symmetry-visible .symmetry-guide { display:block; }
     canvas { display:block; width:100%; height:min(61vh, 620px); min-height:340px; background:#fff; touch-action:none; cursor:crosshair; }
     .remote-cursors { position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:3; }
     .remote-cursor { position:absolute; left:0; top:0; transform:translate(-2px,-2px); transition:left .045s linear, top .045s linear; will-change:left,top; }
@@ -205,6 +207,7 @@
             <button class="action-btn" id="undoBtn" title="Undo is unavailable on the shared canvas" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg></button>
             <button class="action-btn" id="redoBtn" title="Redo is unavailable on the shared canvas" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h1"/></svg></button>
             <button class="action-btn" id="gridBtn" type="button" aria-pressed="false" title="Toggle drawing guide grid" aria-label="Toggle drawing guide grid"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18m6-18v18"/></svg><span class="tool-label">Grid</span></button>
+            <button class="action-btn" id="symmetryBtn" type="button" aria-pressed="false" title="Mirror strokes across the center line" aria-label="Toggle symmetry drawing"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 7l-3 5 3 5M19 7l3 5-3 5M7 12h3m4 0h3"/></svg><span class="tool-label">Symmetry</span></button>
             <button class="action-btn" id="focusModeBtn" type="button" aria-pressed="false" title="Enter focus mode (F)"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg><span class="tool-label">Focus</span></button>
             <button class="action-btn" id="shortcutsBtn" type="button" title="Keyboard shortcuts" aria-haspopup="dialog" aria-controls="shortcutsDialog"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.2 1.8c-1 .9-1.8 1.2-1.8 2.7M12 17h.01"/></svg><span class="tool-label">Help</span></button>
             <button class="action-btn" id="shareBtn" type="button" title="Copy a link to invite someone"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.1 0l-3 3A5 5 0 0 0 11 21.1l1.7-1.7"/></svg><span class="tool-label">Invite</span></button>
@@ -215,6 +218,7 @@
           <div class="canvas-frame">
             <canvas id="canvas" aria-label="Your drawing canvas. Use a mouse, finger, or stylus to draw."></canvas>
             <div class="canvas-grid" aria-hidden="true"></div>
+            <div class="symmetry-guide" aria-hidden="true"></div>
             <div class="remote-cursors" id="remoteCursors" aria-hidden="true"></div>
             <div class="canvas-hint">YOUR CANVAS · YOUR PACE</div>
           </div>
@@ -235,6 +239,7 @@
       <div class="shortcut-row"><span>Select brush</span><kbd>B</kbd></div>
       <div class="shortcut-row"><span>Select eraser</span><kbd>E</kbd></div>
       <div class="shortcut-row"><span>Enter / exit focus mode</span><kbd>F</kbd></div>
+      <div class="shortcut-row"><span>Toggle symmetry drawing</span><kbd>S</kbd></div>
       <div class="shortcut-row"><span>Exit focus mode or close this panel</span><kbd>Esc</kbd></div>
     </div>
     <p class="shortcuts-note">You can also use every drawing tool with a tap or click. Shortcuts are available when you are not typing in a field.</p>
@@ -255,6 +260,8 @@
       const redoBtn = document.getElementById('redoBtn');
       const focusModeBtn = document.getElementById('focusModeBtn');
       const gridBtn = document.getElementById('gridBtn');
+      const symmetryBtn = document.getElementById('symmetryBtn');
+      let symmetryEnabled = false;
       const canvasFrame = document.querySelector('.canvas-frame');
       const studio = document.querySelector('.studio');
       const saveStatus = document.getElementById('saveStatus');
@@ -525,6 +532,11 @@
         ctx.fill();
         ctx.beginPath();
         ctx.moveTo(lastPoint.x, lastPoint.y);
+        if (symmetryEnabled) {
+          const mirrorX = cssWidth - lastPoint.x;
+          ctx.beginPath(); ctx.arc(mirrorX, lastPoint.y, Math.max(strokeSize / 2, 0.6), 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(mirrorX, lastPoint.y);
+        }
       }
       function draw(event) {
         if (!drawing) return;
@@ -538,6 +550,11 @@
         ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
+        if (symmetryEnabled) {
+          const mirrorX = cssWidth - p.x;
+          const previousMirrorX = cssWidth - lastPoint.x;
+          ctx.beginPath(); ctx.moveTo(previousMirrorX, lastPoint.y); ctx.lineTo(mirrorX, p.y); ctx.stroke();
+        }
         lastPoint = p;
         if (currentStroke.points.length < 500) currentStroke.points.push({ x: p.x / cssWidth, y: p.y / cssHeight });
       }
@@ -546,6 +563,7 @@
         drawing = false;
         lastPoint = null;
         const completed = currentStroke;
+        const mirrored = symmetryEnabled && completed ? { color: completed.color, size: completed.size, points: completed.points.map(point => ({ x: 1 - point.x, y: point.y })) } : null;
         currentStroke = null;
         pushHistory();
         if (!completed || !sharedReady) {
@@ -553,11 +571,13 @@
           return;
         }
         saveStatus.textContent = 'Sharing your stroke…';
-        const { error } = await supabase.from('canvas_events').insert({
+        const records = [completed];
+        if (mirrored && mirrored.points.some((point, index) => Math.abs(point.x - completed.points[index].x) > 0.000001)) records.push(mirrored);
+        const { error } = await supabase.from('canvas_events').insert(records.map(payload => ({
           session_id: sessionId,
           event_type: 'stroke',
-          payload: completed
-        });
+          payload
+        })));
         if (error) {
           console.error('Could not publish stroke:', error);
           saveStatus.textContent = 'Stroke could not be shared';
@@ -620,6 +640,15 @@
         requestAnimationFrame(() => setCanvasSize(true));
       }
       focusModeBtn.addEventListener('click', () => setFocusMode(!studio.classList.contains('focus-mode')));
+      function setSymmetry(enabled) {
+        symmetryEnabled = enabled;
+        symmetryBtn.classList.toggle('active', enabled);
+        symmetryBtn.setAttribute('aria-pressed', String(enabled));
+        canvasFrame.classList.toggle('symmetry-visible', enabled);
+        symmetryBtn.title = enabled ? 'Turn symmetry drawing off' : 'Mirror strokes across the center line';
+        showToast(enabled ? 'Symmetry drawing on.' : 'Symmetry drawing off.');
+      }
+      symmetryBtn.addEventListener('click', () => setSymmetry(!symmetryEnabled));
       gridBtn.addEventListener('click', () => {
         const enabled = canvasFrame.classList.toggle('grid-visible');
         gridBtn.classList.toggle('active', enabled);
@@ -697,6 +726,7 @@
         else if (event.key.toLowerCase() === 'f') setFocusMode(!studio.classList.contains('focus-mode'));
         else if (event.key.toLowerCase() === 'b') setTool('brush');
         else if (event.key.toLowerCase() === 'e') setTool('eraser');
+        else if (event.key.toLowerCase() === 's') setSymmetry(!symmetryEnabled);
       });
 
       setCanvasSize(false);
