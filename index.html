@@ -1318,10 +1318,8 @@
           throw error;
         }
         canvasList = data || [];
-        const privateCanvases = readPrivateCanvases();
         const options = [
           ...canvasList.map(item => new Option(item.name + ' · Shared', item.id)),
-          ...privateCanvases.map(item => new Option(item.name + ' · Private', item.id)),
           ...(groupRoomState ? [new Option(groupRoomState.name + ' · Group', GROUP_PREFIX + groupRoomState.id)] : [])
         ];
         if (!options.length) {
@@ -1333,7 +1331,7 @@
         if (isGroupCanvas(activeCanvasId) && groupRoomState && !options.some(option => option.value === activeCanvasId)) options.push(new Option(groupRoomState.name + ' · Group', activeCanvasId));
         canvasSelect.replaceChildren(...options);
         canvasSelect.value = activeCanvasId;
-        const active = canvasList.find(item => item.id === activeCanvasId) || privateCanvases.find(item => item.id === activeCanvasId) || (isGroupCanvas() ? groupRoomState : null);
+        const active = canvasList.find(item => item.id === activeCanvasId) || (isGroupCanvas() ? groupRoomState : null);
         if (activeNameEl) activeNameEl.textContent = active ? active.name : 'Canvas';
       }
       function updateCanvasAddress() {
