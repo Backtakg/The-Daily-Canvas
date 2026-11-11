@@ -811,6 +811,7 @@
           const undoIndex = undoStack.indexOf(localStrokeId);
           if (undoIndex !== -1) undoStack[undoIndex] = inserted.id;
           if (hiddenStrokeIds.delete(localStrokeId)) hiddenStrokeIds.add(String(inserted.id));
+          sessionStorage.setItem('daily-canvas-hidden-strokes', JSON.stringify([...hiddenStrokeIds]));
           updateHistoryButtons();
         }
         if (error) {
