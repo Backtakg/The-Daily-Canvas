@@ -368,16 +368,15 @@
         new ResizeObserver(() => {
           clearTimeout(resizeTimer);
           resizeTimer = setTimeout(() => {
-            const before = snapshot();
-            const oldW = cssWidth, oldH = cssHeight;
-            setCanvasSize(false);
-            ctx.drawImage(imageFromData(before, canvas.width, canvas.height), 0, 0, oldW, oldH);
-            pushHistory();
+            setCanvasSize(true);
             scheduleSave();
           }, 120);
         }).observe(canvas);
       } else {
-        window.addEventListener('resize', () => setCanvasSize(true));
+        window.addEventListener('resize', () => {
+          setCanvasSize(true);
+          scheduleSave();
+        });
       }
     })();
 
