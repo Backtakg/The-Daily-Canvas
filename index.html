@@ -697,6 +697,9 @@
         canvasSelect.value = GROUP_PREFIX + room.id;
         canvasStrokes.push(...(room.events || []));
         for (const row of canvasStrokes) lastEventId = Math.max(lastEventId, Number(row.id) || 0);
+        const ownGroupRows = canvasStrokes.filter(row => row.session_id === sessionId);
+        undoStack.push(...ownGroupRows.filter(row => !hiddenStrokeIds.has(String(row.id))).map(row => row.id));
+        redoStack.push(...ownGroupRows.filter(row => hiddenStrokeIds.has(String(row.id))).map(row => row.id).reverse());
         renderCanvasLedger();
         sharedReady = true;
         const activeNameEl = document.getElementById('activeCanvasName');
@@ -732,7 +735,7 @@
           if (switchToken !== channelSwitchToken || !groupRoomState) return;
           const { data: latest, error: pollError } = await supabase.rpc('get_private_group_room', { p_room_id: roomId, p_secret: secret });
           if (pollError || switchToken !== channelSwitchToken) return;
-          const fresh = (latest?.events || []).filter(row => Number(row.id) > lastEventId);
+          const fresh = (latest?.events || []).filter(row => Number(row.id) > lastEventId && row.session_id !== sessionId);
           if (fresh.length) {
             canvasStrokes.push(...fresh);
             fresh.forEach(row => { lastEventId = Math.max(lastEventId, Number(row.id)); });
@@ -1328,7 +1331,7 @@
           return;
         }
         if (!options.some(option => option.value === activeCanvasId) && !isGroupCanvas(activeCanvasId)) activeCanvasId = options[0].value;
-        if (isGroupCanvas(activeCanvasId) && groupRoomState) options.push(new Option(groupRoomState.name + ' · Group', activeCanvasId));
+        if (isGroupCanvas(activeCanvasId) && groupRoomState && !options.some(option => option.value === activeCanvasId)) options.push(new Option(groupRoomState.name + ' · Group', activeCanvasId));
         canvasSelect.replaceChildren(...options);
         canvasSelect.value = activeCanvasId;
         const active = canvasList.find(item => item.id === activeCanvasId) || privateCanvases.find(item => item.id === activeCanvasId) || (isGroupCanvas() ? groupRoomState : null);
