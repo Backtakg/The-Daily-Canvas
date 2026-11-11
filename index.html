@@ -261,8 +261,11 @@
             <button class="tool-btn" id="ellipseTool" aria-label="Ellipse tool" title="Circle or ellipse (O)">
               <svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg><span class="tool-label">Ellipse</span>
             </button>
-            <button class="tool-btn" id="fillShapesBtn" type="button" aria-pressed="false" title="Fill shapes">
-              <svg viewBox="0 0 24 24"><path d="M4 7 7 4h10l3 3v10l-3 3H7l-3-3Z" fill="currentColor" stroke="none"/></svg><span class="tool-label">Fill</span>
+            <button class="tool-btn" id="fillShapesBtn" type="button" aria-pressed="false" title="Fill shapes as you draw">
+              <svg viewBox="0 0 24 24"><path d="M4 7 7 4h10l3 3v10l-3 3H7l-3-3Z" fill="currentColor" stroke="none"/></svg><span class="tool-label">Shape fill</span>
+            </button>
+            <button class="tool-btn" id="bucketTool" type="button" title="Bucket fill (G)">
+              <svg viewBox="0 0 24 24"><path d="m4 13 7-9 9 7-7 9H7l-3-7Z"/><path d="m11 4 9 7M15 17h.01M18 20h.01M20 16h.01"/></svg><span class="tool-label">Bucket</span>
             </button>
           </div>
           <span class="separator"></span>
@@ -325,6 +328,7 @@
       <div class="shortcut-row"><span>Select line tool</span><kbd>L</kbd></div>
       <div class="shortcut-row"><span>Select rectangle tool</span><kbd>R</kbd></div>
       <div class="shortcut-row"><span>Select ellipse tool</span><kbd>O</kbd></div>
+      <div class="shortcut-row"><span>Bucket fill a closed area</span><kbd>G</kbd></div>
       <div class="shortcut-row"><span>Undo your last stroke</span><kbd>Ctrl / ⌘ Z</kbd></div>
       <div class="shortcut-row"><span>Redo your last undone stroke</span><kbd>Ctrl / ⌘ ⇧ Z</kbd></div>
       <div class="shortcut-row"><span>Enter / exit focus mode</span><kbd>F</kbd></div>
@@ -346,6 +350,7 @@
       const rectangleBtn = document.getElementById('rectangleTool');
       const ellipseBtn = document.getElementById('ellipseTool');
       const fillShapesBtn = document.getElementById('fillShapesBtn');
+      const bucketBtn = document.getElementById('bucketTool');
       const sizeInput = document.getElementById('brushSize');
       const sizeValue = document.getElementById('sizeValue');
       const undoBtn = document.getElementById('undoBtn');
@@ -647,7 +652,8 @@
         lineBtn.classList.toggle('active', tool === 'line');
         rectangleBtn.classList.toggle('active', tool === 'rectangle');
         ellipseBtn.classList.toggle('active', tool === 'ellipse');
-        canvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
+        bucketBtn.classList.toggle('active', tool === 'bucket');
+        canvas.style.cursor = tool === 'eraser' ? 'cell' : tool === 'bucket' ? 'copy' : 'crosshair';
       }
       function applyCanvasView() {
         canvasWorld.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
@@ -696,6 +702,66 @@
         }
         return points;
       }
+      function bucketFillAt(point) {
+        if (!sharedReady) { showToast('Connecting to the shared canvas — try again in a moment.'); return; }
+        const gridW = 240;
+        const gridH = Math.max(1, Math.min(240, Math.round(gridW * cssHeight / cssWidth)));
+        const sample = document.createElement('canvas');
+        sample.width = gridW; sample.height = gridH;
+        const sampleCtx = sample.getContext('2d', { willReadFrequently: true });
+        sampleCtx.drawImage(canvas, 0, 0, gridW, gridH);
+        const image = sampleCtx.getImageData(0, 0, gridW, gridH);
+        const data = image.data;
+        const sx = Math.max(0, Math.min(gridW - 1, Math.floor(point.x / cssWidth * gridW)));
+        const sy = Math.max(0, Math.min(gridH - 1, Math.floor(point.y / cssHeight * gridH)));
+        const start = (sy * gridW + sx) * 4;
+        const target = [data[start], data[start + 1], data[start + 2]];
+        const replacement = [parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16), parseInt(color.slice(5, 7), 16)];
+        if (target.every((v, i) => Math.abs(v - replacement[i]) < 8)) return;
+        const seen = new Uint8Array(gridW * gridH);
+        const queue = new Int32Array(gridW * gridH);
+        let head = 0, tail = 0;
+        const matches = index => {
+          const p = index * 4;
+          return !seen[index] && Math.abs(data[p] - target[0]) < 34 &&
+            Math.abs(data[p + 1] - target[1]) < 34 && Math.abs(data[p + 2] - target[2]) < 34;
+        };
+        const first = sy * gridW + sx;
+        if (!matches(first)) return;
+        queue[tail++] = first; seen[first] = 1;
+        while (head < tail) {
+          const index = queue[head++], x = index % gridW, y = Math.floor(index / gridW);
+          const neighbors = [x > 0 ? index - 1 : -1, x < gridW - 1 ? index + 1 : -1,
+            y > 0 ? index - gridW : -1, y < gridH - 1 ? index + gridW : -1];
+          for (const next of neighbors) if (next >= 0 && matches(next)) { seen[next] = 1; queue[tail++] = next; }
+        }
+        const points = [];
+        for (let y = 0; y < gridH; y++) {
+          let left = gridW, right = -1;
+          for (let x = 0; x < gridW; x++) if (seen[y * gridW + x]) { left = Math.min(left, x); right = x; }
+          if (right < left) continue;
+          const x1 = left / gridW, x2 = (right + 1) / gridW, yn = (y + 0.5) / gridH;
+          if (points.length % 4 === 0) points.push({ x: x1, y: yn }, { x: x2, y: yn });
+          else points.push({ x: x2, y: yn }, { x: x1, y: yn });
+        }
+        if (!points.length || points.length > 500) { showToast('That area is too detailed to fill.'); return; }
+        const fillStroke = { color, size: Math.max(1.25 / gridW, 1 / cssWidth), points };
+        ctx.save();
+        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = fillStroke.size * cssWidth;
+        ctx.lineCap = 'square';
+        ctx.beginPath();
+        points.forEach((p, index) => {
+          const x = p.x * cssWidth, y = p.y * cssHeight;
+          if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.restore();
+        drawing = true;
+        currentStroke = fillStroke;
+        endDraw();
+      }
       function startDraw(event) {
         if (event.button !== undefined && event.button !== 0) return;
         if (panMode) {
@@ -708,6 +774,7 @@
           return;
         }
         event.preventDefault();
+        if (tool === 'bucket') { bucketFillAt(pointFromEvent(event)); return; }
         drawing = true;
         updateHistoryButtons();
         sendCursor(event, false, true);
@@ -1044,6 +1111,7 @@
         else if (event.key.toLowerCase() === 'l') setTool('line');
         else if (event.key.toLowerCase() === 'r') setTool('rectangle');
         else if (event.key.toLowerCase() === 'o') setTool('ellipse');
+        else if (event.key.toLowerCase() === 'g') setTool('bucket');
       });
 
       setCanvasSize(false);
