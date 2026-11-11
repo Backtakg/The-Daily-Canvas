@@ -1044,7 +1044,7 @@
         completed.size = completed.size * cssWidth / 1000;
         completed.space = 'world-v1';
         saveStatus.textContent = 'Sharing your stroke…';
-        const localStrokeId = 'local-' + crypto.randomUUID();
+        const localStrokeId = 'local-' + makeClientId();
         canvasStrokes.push({ id: localStrokeId, session_id: sessionId, canvas_id: activeCanvasId, payload: completed });
         undoStack.push(localStrokeId);
         redoStack.length = 0;
