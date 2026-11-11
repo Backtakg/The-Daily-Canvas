@@ -195,6 +195,9 @@
             <button class="tool-btn" id="ellipseTool" aria-label="Ellipse tool" title="Circle or ellipse (O)">
               <svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg><span class="tool-label">Ellipse</span>
             </button>
+            <button class="tool-btn" id="fillShapesBtn" type="button" aria-pressed="false" title="Fill shapes">
+              <svg viewBox="0 0 24 24"><path d="M4 7 7 4h10l3 3v10l-3 3H7l-3-3Z" fill="currentColor" stroke="none"/></svg><span class="tool-label">Fill</span>
+            </button>
           </div>
           <span class="separator"></span>
           <div class="palette" aria-label="Colors">
@@ -264,6 +267,7 @@
       const lineBtn = document.getElementById('lineTool');
       const rectangleBtn = document.getElementById('rectangleTool');
       const ellipseBtn = document.getElementById('ellipseTool');
+      const fillShapesBtn = document.getElementById('fillShapesBtn');
       const sizeInput = document.getElementById('brushSize');
       const sizeValue = document.getElementById('sizeValue');
       const undoBtn = document.getElementById('undoBtn');
@@ -276,6 +280,7 @@
       let color = '#292b25';
       let size = 5;
       let tool = 'brush';
+      let fillShapes = false;
       let drawing = false;
       let lastPoint = null;
       let currentStroke = null;
@@ -528,6 +533,32 @@
         const rect = canvas.getBoundingClientRect();
         return { x: event.clientX - rect.left, y: event.clientY - rect.top };
       }
+      function makeFilledShapePoints(start, end, shape) {
+        const left = Math.min(start.x, end.x);
+        const right = Math.max(start.x, end.x);
+        const top = Math.min(start.y, end.y);
+        const bottom = Math.max(start.y, end.y);
+        const height = Math.max(1, bottom - top);
+        const spacing = Math.max(2, currentStroke.size * cssWidth * 0.8);
+        const rows = Math.max(2, Math.min(240, Math.ceil(height / spacing) + 1));
+        const points = [];
+        for (let row = 0; row < rows; row++) {
+          const y = top + height * row / (rows - 1);
+          let x1 = left, x2 = right;
+          if (shape === 'ellipse') {
+            const rx = Math.max(0.5, (right - left) / 2);
+            const ry = Math.max(0.5, height / 2);
+            const ny = (y - (top + bottom) / 2) / ry;
+            const half = rx * Math.sqrt(Math.max(0, 1 - ny * ny));
+            const center = (left + right) / 2;
+            x1 = center - half;
+            x2 = center + half;
+          }
+          if (row % 2) { const swap = x1; x1 = x2; x2 = swap; }
+          points.push({ x: x1 / cssWidth, y: y / cssHeight }, { x: x2 / cssWidth, y: y / cssHeight });
+        }
+        return points;
+      }
       function startDraw(event) {
         if (event.button !== undefined && event.button !== 0) return;
         event.preventDefault();
@@ -569,7 +600,14 @@
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
           ctx.beginPath();
-          if (tool === 'line') {
+          if (fillShapes && tool !== 'line') {
+            currentStroke.points = makeFilledShapePoints(lastPoint, p, tool);
+            currentStroke.points.forEach((point, index) => {
+              const x = point.x * cssWidth, y = point.y * cssHeight;
+              if (index === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            });
+          } else if (tool === 'line') {
             ctx.moveTo(lastPoint.x, lastPoint.y);
             ctx.lineTo(p.x, p.y);
             currentStroke.points = [
@@ -671,6 +709,12 @@
       lineBtn.addEventListener('click', () => setTool('line'));
       rectangleBtn.addEventListener('click', () => setTool('rectangle'));
       ellipseBtn.addEventListener('click', () => setTool('ellipse'));
+      fillShapesBtn.addEventListener('click', () => {
+        fillShapes = !fillShapes;
+        fillShapesBtn.classList.toggle('active', fillShapes);
+        fillShapesBtn.setAttribute('aria-pressed', String(fillShapes));
+        showToast(fillShapes ? 'Filled shapes enabled.' : 'Shape outlines enabled.');
+      });
       document.querySelectorAll('.swatch').forEach(button => {
         button.addEventListener('click', () => {
           color = button.dataset.color;
