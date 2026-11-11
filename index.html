@@ -511,7 +511,8 @@
           if (!row || row.session_id === sessionId || row.id <= lastEventId) return;
           if (!sharedReady) { pendingEvents.push(row); return; }
           canvasStrokes.push(row);
-          renderCanvasLedger();
+          if (drawing) paintSharedStroke(row.payload);
+          else renderCanvasLedger();
           lastEventId = Math.max(lastEventId, Number(row.id));
           announceActivity();
         });
@@ -667,6 +668,7 @@
         }
         event.preventDefault();
         drawing = true;
+        updateHistoryButtons();
         sendCursor(event, false, true);
         canvas.setPointerCapture?.(event.pointerId);
         lastPoint = pointFromEvent(event);
@@ -776,6 +778,7 @@
         }
         if (!drawing) return;
         drawing = false;
+        updateHistoryButtons();
         lastPoint = null;
         const completed = currentStroke;
         currentStroke = null;
