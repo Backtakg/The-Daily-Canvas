@@ -943,12 +943,13 @@
         }
         saveStatus.textContent = 'Sharing your stroke…';
         const localStrokeId = 'local-' + crypto.randomUUID();
-        canvasStrokes.push({ id: localStrokeId, session_id: sessionId, payload: completed });
+        canvasStrokes.push({ id: localStrokeId, session_id: sessionId, canvas_id: activeCanvasId, payload: completed });
         undoStack.push(localStrokeId);
         redoStack.length = 0;
         updateHistoryButtons();
         const { data: inserted, error } = await supabase.from('canvas_events').insert({
           session_id: sessionId,
+          canvas_id: activeCanvasId,
           event_type: 'stroke',
           payload: completed
         }).select('id').single();
