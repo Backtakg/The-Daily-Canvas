@@ -431,6 +431,7 @@
       }
       function sendCursor(event, hidden = false) {
         if (!presenceChannel || !sharedReady) return;
+        if (hidden) cursorSendPending = null;
         const now = performance.now();
         const send = () => {
           if (!presenceChannel) return;
