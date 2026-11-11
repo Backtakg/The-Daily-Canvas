@@ -37,6 +37,12 @@
     h1 { font-size:clamp(30px, 5vw, 48px); line-height:1.04; letter-spacing:-.065em; font-weight:560; margin:0; }
     .subtitle { margin:10px 0 0; color:#77776f; font-size:14px; }
     .today { text-align:right; color:var(--muted); font-size:12px; white-space:nowrap; padding-bottom:3px; }
+    .daily-idea { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:15px 18px; margin:0 0 14px; border:1px solid var(--line); border-radius:14px; background:rgba(255,254,250,.72); }
+    .idea-copy { min-width:0; }
+    .idea-label { margin:0 0 5px; color:var(--muted); font-size:9px; letter-spacing:.16em; text-transform:uppercase; }
+    .idea-text { margin:0; font-size:14px; letter-spacing:-.02em; }
+    .idea-refresh { flex:none; border:1px solid var(--line); background:transparent; border-radius:9px; padding:8px 11px; color:#66665e; font-size:11px; cursor:pointer; }
+    .idea-refresh:hover { background:#f2f0e9; }
     .studio { background:var(--panel); border:1px solid var(--line); border-radius:18px; overflow:hidden; box-shadow:var(--shadow); }
     .toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:13px 15px; border-bottom:1px solid var(--line); }
     .tool-group { display:flex; align-items:center; gap:5px; }
@@ -120,6 +126,14 @@
         <div class="today" id="today"></div>
       </section>
 
+      <section class="daily-idea" aria-label="Daily drawing idea">
+        <div class="idea-copy">
+          <p class="idea-label">A little inspiration</p>
+          <p class="idea-text" id="dailyIdea">Draw something that makes you feel at home.</p>
+        </div>
+        <button class="idea-refresh" id="ideaRefresh" type="button">Another idea ↗</button>
+      </section>
+
       <section class="studio" aria-label="Drawing studio">
         <div class="toolbar" role="toolbar" aria-label="Drawing tools">
           <div class="tool-group">
@@ -188,6 +202,32 @@
       let saveTimer = null;
       let toastTimer = null;
       let cssWidth = 0, cssHeight = 0, pixelRatio = 1;
+
+      const drawingIdeas = [
+        'Draw something that makes you feel at home.',
+        'Imagine a tiny house on the moon.',
+        'Draw your favourite memory as a landscape.',
+        'Invent a flower that has never existed.',
+        'Make a portrait using only three colours.',
+        'Draw the sound of your favourite song.',
+        'Design a little creature that lives in your pocket.',
+        'Turn an ordinary object into something magical.',
+        'Draw a place where you would love to get lost.',
+        'Make a pattern inspired by the weather today.',
+        'Draw your dream breakfast.',
+        'Imagine what happiness looks like as a shape.',
+        'Create a postcard from a place that does not exist.',
+        'Draw a tiny world inside a raindrop.'
+      ];
+      const dayNumber = Math.floor(Date.now() / 86400000);
+      let ideaIndex = dayNumber % drawingIdeas.length;
+      const ideaText = document.getElementById('dailyIdea');
+      function showIdea() { ideaText.textContent = drawingIdeas[ideaIndex]; }
+      showIdea();
+      document.getElementById('ideaRefresh').addEventListener('click', () => {
+        ideaIndex = (ideaIndex + 1 + Math.floor(Math.random() * (drawingIdeas.length - 1))) % drawingIdeas.length;
+        showIdea();
+      });
 
       document.getElementById('today').textContent = new Intl.DateTimeFormat(undefined, {
         weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
