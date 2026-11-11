@@ -55,7 +55,7 @@
     .canvas-manager button { min-height:34px; padding:0 11px; border:1px solid var(--line); border-radius:8px; background:transparent; color:#66665e; font:inherit; font-size:11px; cursor:pointer; }
     .canvas-manager button:hover { background:#f2f0e9; }
     .canvas-manager .manager-spacer { flex:1; }
-    @media (max-width:420px) { .canvas-current-name { max-width:92px; font-size:10px; } .canvas-manager { gap:6px; padding:9px 8px; } .canvas-manager-label { display:none; } .canvas-manager select { flex:1; max-width:none; } .canvas-manager button { padding:0 8px; font-size:10px; } }
+    @media (max-width:420px) { .canvas-manager { gap:6px; padding:9px 8px; } .canvas-manager-label { display:none; } .canvas-manager select { flex:1; max-width:none; } .canvas-manager button { padding:0 8px; font-size:10px; } }
     .studio.focus-mode { position:fixed; inset:12px; z-index:20; display:flex; flex-direction:column; border-radius:16px; }
     .studio.focus-mode .canvas-wrap { flex:1; min-height:0; display:flex; }
     .studio.focus-mode .canvas-frame { flex:1; min-height:0; }
@@ -300,8 +300,7 @@
       <section class="studio" aria-label="Drawing studio">
         <div class="canvas-manager" aria-label="Canvas manager">
           <span class="canvas-manager-label">Canvas</span>
-          <select id="canvasSelect" aria-label="Choose a canvas"><option value="">Loading canvases…</option></select>\n          <span class="canvas-current-name" id="activeCanvasName" aria-live="polite">Loading canvas…</span>
-          <span class="manager-spacer"></span>
+          <select id="canvasSelect" aria-label="Choose a canvas"><option value="">Loading canvases…</option></select>\n          <span class="manager-spacer"></span>
           <button id="renameCanvasBtn" type="button" title="Rename this canvas">Rename</button>
           <button id="newCanvasBtn" type="button" title="Create another shared canvas">+ New</button>
         </div>
