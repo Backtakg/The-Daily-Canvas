@@ -687,7 +687,9 @@
 
         function updateOnlineCount(includeSelf = false) {
           const state = presence.presenceState() || {};
-          const count = Math.max(includeSelf ? 1 : 0, Object.keys(state).length);
+          const remoteCount = Object.values(state).reduce((total, entries) =>
+            total + (Array.isArray(entries) ? entries.length : 0), 0);
+          const count = Math.max(includeSelf ? 1 : 0, remoteCount);
           if (onlineCountEl) onlineCountEl.textContent = String(count);
           const footerCount = document.getElementById('canvasLiveCount');
           if (footerCount) footerCount.textContent = count + (count === 1 ? ' visitor online' : ' visitors online');
@@ -859,18 +861,25 @@
         zoomLevel.textContent = Math.round(zoom * 100) + '%';
         zoomOutBtn.disabled = zoom <= 0.1;
         zoomInBtn.disabled = zoom >= 8;
+        // Repaint from the immutable world-coordinate stroke ledger on every
+        // camera change. Never zoom the bitmap or reuse a stale preview bitmap.
         renderCanvasLedger();
       }
       function setZoom(nextZoom, anchorX = cssWidth / 2, anchorY = cssHeight / 2) {
-        const next = Math.max(0.1, Math.min(8, nextZoom));
-        if (next === zoom) return;
-        // Preserve the exact world point beneath the zoom anchor. Never derive
-        // the camera from stroke bounds: doing so makes existing artwork jump
-        // and can move a stroke completely outside the viewport.
-        const worldAtAnchorX = viewX + (anchorX - cssWidth / 2) / zoom;
-        const worldAtAnchorY = viewY + (anchorY - cssHeight / 2) / zoom;
-        viewX = worldAtAnchorX - (anchorX - cssWidth / 2) / next;
-        viewY = worldAtAnchorY - (anchorY - cssHeight / 2) / next;
+        const next = Math.max(0.1, Math.min(8, Number(nextZoom)));
+        if (!Number.isFinite(next) || next === zoom) return;
+        if (!Number.isFinite(viewX) || !Number.isFinite(viewY)) {
+          viewX = cssWidth / 2;
+          viewY = cssHeight / 2;
+        }
+        const offsetX = (Number(anchorX) - cssWidth / 2);
+        const offsetY = (Number(anchorY) - cssHeight / 2);
+        // Camera coordinates are CSS-pixel world units. Keep the world point
+        // under the zoom anchor fixed, including when the user zooms repeatedly.
+        const anchorWorldX = viewX + offsetX / zoom;
+        const anchorWorldY = viewY + offsetY / zoom;
+        viewX = anchorWorldX - offsetX / next;
+        viewY = anchorWorldY - offsetY / next;
         zoom = next;
         applyCanvasView();
       }
@@ -1112,12 +1121,13 @@
           return;
         }
         completed.points = completed.points.map(point => {
+          // Input points are normalized canvas-screen coordinates. Convert once
+          // into world units; replay and zoom never mutate the stored points.
           const screenX = Number(point.x) * cssWidth;
           const screenY = Number(point.y) * cssHeight;
-          return {
-            x: (((screenX - cssWidth / 2) / zoom + viewX) / 1000),
-            y: (((screenY - cssHeight / 2) / zoom + viewY) / 1000)
-          };
+          const worldX = viewX + (screenX - cssWidth / 2) / zoom;
+          const worldY = viewY + (screenY - cssHeight / 2) / zoom;
+          return { x: worldX / 1000, y: worldY / 1000 };
         }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
         completed.size = Number(completed.size) * cssWidth / 1000;
         completed.space = 'world-v1';
