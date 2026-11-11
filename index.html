@@ -692,6 +692,8 @@
         }
         if (switchToken !== channelSwitchToken) return;
         groupRoomState = { id: room.id, name: room.name, secret };
+        if (![...canvasSelect.options].some(option => option.value === GROUP_PREFIX + room.id)) canvasSelect.add(new Option(room.name + ' · Group', GROUP_PREFIX + room.id));
+        canvasSelect.value = GROUP_PREFIX + room.id;
         canvasStrokes.push(...(room.events || []));
         for (const row of canvasStrokes) lastEventId = Math.max(lastEventId, Number(row.id) || 0);
         renderCanvasLedger();
@@ -741,6 +743,9 @@
       }
 
       async function connectSharedCanvas(canvasId) {
+        if (groupPollTimer) { clearInterval(groupPollTimer); groupPollTimer = null; }
+        groupRoomState = null;
+        document.getElementById('inviteGroupBtn').hidden = true;
         const switchToken = ++channelSwitchToken;
         sharedReady = false;
         const oldSharedChannel = sharedChannel;
@@ -1344,6 +1349,11 @@
         activeCanvasId = id;
         canvasSelect.value = id;
         updateCanvasAddress();
+        if (!isGroupCanvas(id)) {
+          if (groupPollTimer) { clearInterval(groupPollTimer); groupPollTimer = null; }
+          groupRoomState = null;
+          document.getElementById('inviteGroupBtn').hidden = true;
+        }
         if (isGroupCanvas(id)) {
           await connectGroupCanvas(groupRoomId(id), groupSecret);
         } else if (isPrivateCanvas(id)) {
