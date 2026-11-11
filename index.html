@@ -51,11 +51,11 @@
     .studio { background:var(--panel); border:1px solid var(--line); border-radius:18px; overflow:hidden; box-shadow:var(--shadow); }
     .canvas-manager { display:flex; align-items:center; gap:9px; padding:12px 15px; border-bottom:1px solid var(--line); background:rgba(255,254,250,.55); }
     .canvas-manager-label { color:#85847b; font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
-    .canvas-manager select { min-width:0; max-width:min(260px,42vw); height:34px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:#fffefa; color:var(--ink); font:inherit; font-size:12px; }
+    .canvas-current-name { min-width:0; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink); font-size:12px; font-weight:650; letter-spacing:-.015em; }\n    .canvas-manager select { min-width:0; max-width:min(260px,42vw); height:34px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:#fffefa; color:var(--ink); font:inherit; font-size:12px; }
     .canvas-manager button { min-height:34px; padding:0 11px; border:1px solid var(--line); border-radius:8px; background:transparent; color:#66665e; font:inherit; font-size:11px; cursor:pointer; }
     .canvas-manager button:hover { background:#f2f0e9; }
     .canvas-manager .manager-spacer { flex:1; }
-    @media (max-width:420px) { .canvas-manager { gap:6px; padding:9px 8px; } .canvas-manager-label { display:none; } .canvas-manager select { flex:1; max-width:none; } .canvas-manager button { padding:0 8px; font-size:10px; } }
+    @media (max-width:420px) { .canvas-current-name { max-width:92px; font-size:10px; } .canvas-manager { gap:6px; padding:9px 8px; } .canvas-manager-label { display:none; } .canvas-manager select { flex:1; max-width:none; } .canvas-manager button { padding:0 8px; font-size:10px; } }
     .studio.focus-mode { position:fixed; inset:12px; z-index:20; display:flex; flex-direction:column; border-radius:16px; }
     .studio.focus-mode .canvas-wrap { flex:1; min-height:0; display:flex; }
     .studio.focus-mode .canvas-frame { flex:1; min-height:0; }
@@ -300,7 +300,7 @@
       <section class="studio" aria-label="Drawing studio">
         <div class="canvas-manager" aria-label="Canvas manager">
           <span class="canvas-manager-label">Canvas</span>
-          <select id="canvasSelect" aria-label="Choose a canvas"><option value="">Loading canvases…</option></select>
+          <select id="canvasSelect" aria-label="Choose a canvas"><option value="">Loading canvases…</option></select>\n          <span class="canvas-current-name" id="activeCanvasName" aria-live="polite">Loading canvas…</span>
           <span class="manager-spacer"></span>
           <button id="renameCanvasBtn" type="button" title="Rename this canvas">Rename</button>
           <button id="newCanvasBtn" type="button" title="Create another shared canvas">+ New</button>
@@ -611,11 +611,9 @@
         const oldPresenceChannel = presenceChannel;
         sharedChannel = null;
         presenceChannel = null;
-        saveStatus.textContent = 'Opening shared canvas…';
-        const removals = [];
-        if (oldSharedChannel) removals.push(supabase.removeChannel(oldSharedChannel));
-        if (oldPresenceChannel && oldPresenceChannel !== oldSharedChannel) removals.push(supabase.removeChannel(oldPresenceChannel));
-        if (removals.length) await Promise.all(removals);
+        saveStatus.textContent = 'Connecting to the shared world…';
+        const oldChannels = [...new Set([oldSharedChannel, oldPresenceChannel].filter(Boolean))];
+        if (oldChannels.length) await Promise.all(oldChannels.map(item => supabase.removeChannel(item)));
         if (switchToken !== channelSwitchToken) return;
 
         canvasStrokes.length = 0;
@@ -629,63 +627,54 @@
         updateHistoryButtons();
 
         const onlineCountEl = document.getElementById('onlineCount');
-        const canvasLiveCount = document.getElementById('canvasLiveCount');
         const liveDot = document.getElementById('liveDot');
         const onlineStatus = document.getElementById('onlineStatus');
+        const activeNameEl = document.getElementById('activeCanvasName');
+        const currentCanvas = canvasList.find(item => item.id === canvasId);
+        if (activeNameEl && currentCanvas) activeNameEl.textContent = currentCanvas.name;
 
-        // Presence is deliberately isolated from drawing/database subscriptions.
-        // This keeps the worldwide visitor count alive even if artwork sync has a problem.
+        // One channel carries presence, cursors, and saved drawing changes.
+        // A single subscription avoids split-channel state and keeps all live UI in sync.
         const presenceKey = makeClientId();
-        const presence = supabase.channel('daily-presence-' + canvasId, {
+        const channel = supabase.channel('daily-canvas-' + canvasId, {
           config: { presence: { key: presenceKey }, broadcast: { self: false } }
         });
-        presenceChannel = presence;
-        presence.on('broadcast', { event: 'cursor' }, message => {
+        sharedChannel = channel;
+        presenceChannel = channel;
+
+        function updateOnlineCount(includeSelf = false) {
+          const state = channel.presenceState() || {};
+          const count = Math.max(includeSelf ? 1 : 0, Object.keys(state).length);
+          onlineCountEl.textContent = String(count);
+          liveDot.classList.add('connected');
+          liveDot.classList.remove('offline');
+          onlineStatus?.setAttribute('aria-label', count + (count === 1 ? ' person connected to this canvas worldwide' : ' people connected to this canvas worldwide'));
+        }
+        function markOffline(message) {
+          liveDot.classList.remove('connected');
+          liveDot.classList.add('offline');
+          onlineCountEl.textContent = '—';
+          saveStatus.textContent = message;
+          onlineStatus?.setAttribute('aria-label', 'Live connection unavailable');
+        }
+
+        channel.on('presence', { event: 'sync' }, () => updateOnlineCount());
+        channel.on('presence', { event: 'join' }, () => updateOnlineCount());
+        channel.on('presence', { event: 'leave' }, () => updateOnlineCount());
+        channel.on('broadcast', { event: 'cursor' }, message => {
           const data = message.payload || message;
           if (!data || !data.id || data.id === cursorId) return;
           if (data.hidden) { removeRemoteCursor(data.id); return; }
           if (!Number.isFinite(data.x) || !Number.isFinite(data.y)) return;
           showRemoteCursor(data);
         });
-        function updateOnlineCount() {
-          const state = presence.presenceState() || {};
-          const count = Object.keys(state).length;
-          onlineCountEl.textContent = String(count);
-          if (canvasLiveCount) canvasLiveCount.textContent = count + (count === 1 ? ' person here now' : ' people here now');
-          liveDot.classList.add('connected');
-          liveDot.classList.remove('offline');
-          onlineStatus?.setAttribute('aria-label', count + (count === 1 ? ' person connected worldwide' : ' people connected worldwide'));
-        }
-        presence.on('presence', { event: 'sync' }, updateOnlineCount);
-        presence.on('presence', { event: 'join' }, updateOnlineCount);
-        presence.on('presence', { event: 'leave' }, updateOnlineCount);
-        presence.subscribe((status, subscribeError) => {
-          if (switchToken !== channelSwitchToken) return;
-          if (status === 'SUBSCRIBED') {
-            presence.track({ active: true, joined_at: new Date().toISOString() })
-              .then(updateOnlineCount)
-              .catch(error => {
-                console.error('Visitor presence tracking failed:', error);
-                onlineCountEl.textContent = '—';
-                if (canvasLiveCount) canvasLiveCount.textContent = 'Visitor count unavailable';
-              });
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.error('Visitor presence channel failed:', status, subscribeError || '');
-            liveDot.classList.remove('connected');
-            liveDot.classList.add('offline');
-            onlineCountEl.textContent = '—';
-            if (canvasLiveCount) canvasLiveCount.textContent = 'Visitor count unavailable';
-            onlineStatus?.setAttribute('aria-label', 'Visitor count unavailable');
-          }
-        });
 
-        // Artwork changes use their own channel and cannot block presence.
-        const channel = supabase.channel('daily-canvas-' + canvasId);
-        sharedChannel = channel;
-        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'canvases' }, () => refreshCanvasList());
-        channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'canvas_events', filter: 'canvas_id=eq.' + canvasId }, payload => {
+        channel.on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'canvas_events',
+          filter: 'canvas_id=eq.' + canvasId
+        }, payload => {
           const row = payload.new;
-          if (!row || row.canvas_id !== canvasId || row.session_id === sessionId || row.id <= lastEventId) return;
+          if (!row || row.canvas_id !== canvasId || row.session_id === sessionId || Number(row.id) <= lastEventId) return;
           if (!sharedReady) { pendingEvents.push(row); return; }
           canvasStrokes.push(row);
           if (drawing) paintSharedStroke(row.payload);
@@ -693,44 +682,65 @@
           lastEventId = Math.max(lastEventId, Number(row.id));
           announceActivity();
         });
+        channel.on('postgres_changes', {
+          event: '*', schema: 'public', table: 'canvases'
+        }, () => refreshCanvasList());
+
         channel.subscribe((status, subscribeError) => {
           if (switchToken !== channelSwitchToken) return;
           if (status === 'SUBSCRIBED') {
-            saveStatus.textContent = 'Live drawing connected · syncing artwork…';
-            (async () => { try {
-              const { data, error } = await supabase.from('canvas_events').select('id,session_id,payload,canvas_id').eq('canvas_id', canvasId).order('id', { ascending: false }).limit(5000);
-              if (switchToken !== channelSwitchToken) return;
-              if (error) throw error;
-              for (const row of (data || []).reverse()) {
-                canvasStrokes.push(row);
-                lastEventId = Math.max(lastEventId, Number(row.id));
-              }
-              const ownRows = canvasStrokes.filter(row => row.session_id === sessionId);
-              undoStack.push(...ownRows.filter(row => !hiddenStrokeIds.has(String(row.id))).map(row => row.id));
-              redoStack.push(...ownRows.filter(row => hiddenStrokeIds.has(String(row.id))).map(row => row.id).reverse());
-              renderCanvasLedger();
-              updateHistoryButtons();
-              sharedReady = true;
-              pendingEvents.sort((a,b) => Number(a.id) - Number(b.id)).forEach(row => {
-                if (Number(row.id) > lastEventId && row.session_id !== sessionId) {
+            saveStatus.textContent = 'Live connection established · joining the canvas…';
+            channel.track({ active: true, canvas_id: canvasId, joined_at: new Date().toISOString() })
+              .then(trackStatus => {
+                if (switchToken !== channelSwitchToken) return;
+                if (trackStatus !== 'ok') throw new Error('Presence tracking returned: ' + trackStatus);
+                updateOnlineCount(true);
+              })
+              .catch(error => {
+                console.error('Presence tracking failed:', error);
+                markOffline('Drawing channel connected · visitor count unavailable');
+              });
+
+            (async () => {
+              try {
+                const { data, error } = await supabase.from('canvas_events')
+                  .select('id,session_id,payload,canvas_id')
+                  .eq('canvas_id', canvasId)
+                  .order('id', { ascending: false })
+                  .limit(5000);
+                if (switchToken !== channelSwitchToken) return;
+                if (error) throw error;
+                for (const row of (data || []).reverse()) {
                   canvasStrokes.push(row);
                   lastEventId = Math.max(lastEventId, Number(row.id));
                 }
-              });
-              pendingEvents.length = 0;
-              renderCanvasLedger();
-              updateHistoryButtons();
-              saveStatus.textContent = 'Connected · your drawing is shared worldwide';
-            } catch (error) {
-              console.error('Shared artwork sync failed:', error);
-              saveStatus.textContent = 'Visitor count is live · artwork sync unavailable';
-              showToast('Could not load shared artwork. Please refresh to retry.');
-            } })();
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.error('Shared drawing channel failed:', status, subscribeError || '');
-            saveStatus.textContent = 'Visitor count may be live · drawing connection unavailable';
+                const ownRows = canvasStrokes.filter(row => row.session_id === sessionId);
+                undoStack.push(...ownRows.filter(row => !hiddenStrokeIds.has(String(row.id))).map(row => row.id));
+                redoStack.push(...ownRows.filter(row => hiddenStrokeIds.has(String(row.id))).map(row => row.id).reverse());
+                renderCanvasLedger();
+                updateHistoryButtons();
+                sharedReady = true;
+                pendingEvents.sort((a,b) => Number(a.id) - Number(b.id)).forEach(row => {
+                  if (Number(row.id) > lastEventId && row.session_id !== sessionId) {
+                    canvasStrokes.push(row);
+                    lastEventId = Math.max(lastEventId, Number(row.id));
+                  }
+                });
+                pendingEvents.length = 0;
+                renderCanvasLedger();
+                updateHistoryButtons();
+                saveStatus.textContent = 'Connected · drawing is live worldwide';
+              } catch (error) {
+                console.error('Could not sync shared artwork:', error);
+                saveStatus.textContent = 'Live visitors connected · artwork could not be loaded';
+                showToast('Could not load shared artwork. Check your connection and refresh.');
+              }
+            })();
           } else if (status === 'SUBSCRIBING') {
-            saveStatus.textContent = 'Connecting drawing to the shared world…';
+            saveStatus.textContent = 'Connecting to the shared world…';
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.error('Shared canvas Realtime error:', status, subscribeError || '');
+            markOffline('Live connection failed · retrying when connection returns');
           }
         });
       }
@@ -1097,18 +1107,25 @@
         toastTimer = setTimeout(() => toast.classList.remove('show'), 1900);
       }
       async function refreshCanvasList() {
-        const { data, error } = await supabase.from('canvases').select('id,name,created_at').order('created_at', { ascending: true });
-        if (error) { console.error('Could not load canvases:', error); return; }
+        const activeNameEl = document.getElementById('activeCanvasName');
+        const { data, error } = await supabase.from('canvases')
+          .select('id,name,created_at').order('created_at', { ascending: true });
+        if (error) {
+          console.error('Could not load canvases:', error);
+          if (activeNameEl) activeNameEl.textContent = 'Canvas name unavailable';
+          throw error;
+        }
         canvasList = data || [];
-        if (!canvasList.length) return;
+        if (!canvasList.length) {
+          if (activeNameEl) activeNameEl.textContent = 'No canvases yet';
+          canvasSelect.replaceChildren(new Option('No canvases found', ''));
+          return;
+        }
         if (!canvasList.some(item => item.id === activeCanvasId)) activeCanvasId = canvasList[0].id;
-        canvasSelect.replaceChildren(...canvasList.map(item => {
-          const option = document.createElement('option');
-          option.value = item.id;
-          option.textContent = item.name;
-          return option;
-        }));
+        canvasSelect.replaceChildren(...canvasList.map(item => new Option(item.name, item.id)));
         canvasSelect.value = activeCanvasId;
+        const active = canvasList.find(item => item.id === activeCanvasId);
+        if (activeNameEl) activeNameEl.textContent = active ? active.name : 'Untitled canvas';
       }
       function updateCanvasAddress() {
         localStorage.setItem('daily-canvas-active', activeCanvasId);
@@ -1412,20 +1429,20 @@
 
       setCanvasSize(false);
       updateHistoryButtons();
-      updateCanvasAddress();
-      const initiallyConnectedCanvas = activeCanvasId;
-      connectSharedCanvas(activeCanvasId).catch(error => {
-        console.error('Could not start shared canvas:', error);
-        saveStatus.textContent = 'Could not connect · refresh to retry';
-        document.getElementById('onlineCount').textContent = '—';
-        document.getElementById('canvasLiveCount').textContent = 'Live connection unavailable';
-      });
-      refreshCanvasList().then(() => {
-        if (activeCanvasId !== initiallyConnectedCanvas) {
+      (async () => {
+        try {
+          await refreshCanvasList();
           updateCanvasAddress();
-          connectSharedCanvas(activeCanvasId).catch(error => console.error('Could not connect to selected canvas:', error));
+          await connectSharedCanvas(activeCanvasId);
+        } catch (error) {
+          console.error('The Daily Canvas could not initialize:', error);
+          saveStatus.textContent = 'Could not load the shared canvas · check your connection';
+          document.getElementById('onlineCount').textContent = '—';
+          document.getElementById('liveDot').classList.add('offline');
+          const nameEl = document.getElementById('activeCanvasName');
+          if (nameEl && nameEl.textContent === 'Loading canvas…') nameEl.textContent = 'Canvas unavailable';
         }
-      }).catch(error => console.error('Could not refresh canvas list:', error));
+      })();
       if ('ResizeObserver' in window) {
         let resizeTimer;
         new ResizeObserver(() => {
