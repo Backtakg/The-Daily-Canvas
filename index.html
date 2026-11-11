@@ -469,7 +469,6 @@
         ctx.moveTo(lastPoint.x, lastPoint.y);
       }
       function draw(event) {
-        sendCursor(event);
         if (!drawing) return;
         event.preventDefault();
         const p = pointFromEvent(event);
