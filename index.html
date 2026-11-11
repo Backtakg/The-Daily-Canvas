@@ -554,21 +554,51 @@
           if (!hiddenStrokeIds.has(String(row.id))) paintSharedStroke(row.payload);
         });
       }
+      function persistHiddenStrokes() {
+        try {
+          sessionStorage.setItem('daily-canvas-hidden-strokes', JSON.stringify([...hiddenStrokeIds]));
+        } catch (error) {
+          console.warn('Could not persist local undo history:', error);
+        }
+      }
+      function reconcileStrokeId(oldId, newId) {
+        const oldKey = String(oldId);
+        const newKey = String(newId);
+        for (const stack of [undoStack, redoStack]) {
+          for (let i = 0; i < stack.length; i++) {
+            if (String(stack[i]) === oldKey) stack[i] = newId;
+          }
+        }
+        if (hiddenStrokeIds.delete(oldKey)) hiddenStrokeIds.add(newKey);
+        persistHiddenStrokes();
+        const row = canvasStrokes.find(item => String(item.id) === oldKey);
+        if (row) row.id = newId;
+        renderCanvasLedger();
+        updateHistoryButtons();
+      }
       function undoOwnStroke() {
         if (drawing || !undoStack.length) return;
         const id = undoStack.pop();
+        if (!canvasStrokes.some(row => String(row.id) === String(id))) {
+          updateHistoryButtons();
+          return;
+        }
         hiddenStrokeIds.add(String(id));
-        sessionStorage.setItem('daily-canvas-hidden-strokes', JSON.stringify([...hiddenStrokeIds]));
+        persistHiddenStrokes();
         redoStack.push(id);
         renderCanvasLedger();
         updateHistoryButtons();
-        showToast('Your last stroke was hidden on this device.');
+        showToast('Your last stroke was undone on this device.');
       }
       function redoOwnStroke() {
         if (drawing || !redoStack.length) return;
         const id = redoStack.pop();
+        if (!canvasStrokes.some(row => String(row.id) === String(id))) {
+          updateHistoryButtons();
+          return;
+        }
         hiddenStrokeIds.delete(String(id));
-        sessionStorage.setItem('daily-canvas-hidden-strokes', JSON.stringify([...hiddenStrokeIds]));
+        persistHiddenStrokes();
         undoStack.push(id);
         renderCanvasLedger();
         updateHistoryButtons();
@@ -1067,13 +1097,7 @@
           payload: completed
         }).select('id').single();
         if (inserted?.id) {
-          const localRow = canvasStrokes.find(row => String(row.id) === localStrokeId);
-          if (localRow) localRow.id = inserted.id;
-          const undoIndex = undoStack.indexOf(localStrokeId);
-          if (undoIndex !== -1) undoStack[undoIndex] = inserted.id;
-          if (hiddenStrokeIds.delete(localStrokeId)) hiddenStrokeIds.add(String(inserted.id));
-          sessionStorage.setItem('daily-canvas-hidden-strokes', JSON.stringify([...hiddenStrokeIds]));
-          updateHistoryButtons();
+          reconcileStrokeId(localStrokeId, inserted.id);
         }
         if (error) {
           console.error('Could not publish stroke:', error);
