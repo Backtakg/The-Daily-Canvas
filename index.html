@@ -158,9 +158,8 @@
           <label class="size-wrap" for="brushSize"><span>Size</span><input id="brushSize" type="range" min="1" max="40" value="5"><span class="size-value" id="sizeValue">5</span></label>
           <span class="toolbar-spacer"></span>
           <div class="tool-group">
-            <button class="action-btn" id="undoBtn" title="Undo (Ctrl/Cmd + Z)" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg></button>
-            <button class="action-btn" id="redoBtn" title="Redo (Ctrl/Cmd + Shift + Z)" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h1"/></svg></button>
-            <button class="action-btn" id="clearBtn" title="Clear canvas"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg><span class="tool-label">Clear</span></button>
+            <button class="action-btn" id="undoBtn" title="Undo is unavailable on the shared canvas" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg></button>
+            <button class="action-btn" id="redoBtn" title="Redo is unavailable on the shared canvas" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h1"/></svg></button>
             <button class="action-btn primary" id="saveBtn" title="Save drawing as PNG"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v3h14v-3"/></svg><span class="tool-label">Save</span></button>
           </div>
         </div>
@@ -171,16 +170,18 @@
           </div>
         </div>
         <div class="bottomline">
-          <span class="save-state"><span class="save-dot"></span><span id="saveStatus">Saved on this device</span></span>
-          <span>Made for the joy of making.</span>
+          <span class="save-state"><span class="save-dot"></span><span id="saveStatus">Connecting to the shared canvas…</span></span>
+          <span>Shared live with everyone, everywhere.</span>
         </div>
       </section>
-      <footer><span>One canvas. Countless possibilities.</span><span>Take your time.</span></footer>
+      <footer><span>One world. One shared canvas.</span><span>Take your time.</span></footer>
     </main>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script>
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    const supabase = createClient("https://lxtwznbwblsdhdqswcgc.supabase.co", "sb_publishable_UK8Lm-amJoSMkb_1JeSZ_w_zaOvC4wg");
     (() => {
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext('2d', { alpha: false });
@@ -197,11 +198,20 @@
       let tool = 'brush';
       let drawing = false;
       let lastPoint = null;
+      let currentStroke = null;
       let history = [];
       let historyIndex = -1;
       let saveTimer = null;
       let toastTimer = null;
       let cssWidth = 0, cssHeight = 0, pixelRatio = 1;
+      const sessionId = (() => {
+        let id = localStorage.getItem('daily-canvas-session');
+        if (!id) { id = crypto.randomUUID(); localStorage.setItem('daily-canvas-session', id); }
+        return id;
+      })();
+      let sharedReady = false;
+      let lastEventId = 0;
+      const pendingEvents = [];
 
       const drawingIdeas = [
         'Draw something that makes you feel at home.',
@@ -255,8 +265,6 @@
           history = [];
           historyIndex = -1;
           pushHistory();
-        } else {
-          loadSaved();
         }
       }
 
@@ -293,15 +301,65 @@
           }
         }, 350);
       }
-      function loadSaved() {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (!saved) return;
-        const img = new Image();
-        img.onload = () => {
-          ctx.drawImage(img, 0, 0, cssWidth, cssHeight);
+      function loadSaved() { /* Shared artwork is loaded from the database. */ }
+
+      function paintSharedStroke(stroke) {
+        if (!stroke || !Array.isArray(stroke.points) || !stroke.points.length) return;
+        const pts = stroke.points;
+        const width = Math.max(0.5, Number(stroke.size) * cssWidth);
+        ctx.save();
+        ctx.strokeStyle = stroke.color;
+        ctx.fillStyle = stroke.color;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        const first = pts[0];
+        const x0 = first.x * cssWidth, y0 = first.y * cssHeight;
+        if (pts.length === 1) {
+          ctx.beginPath(); ctx.arc(x0, y0, width / 2, 0, Math.PI * 2); ctx.fill();
+        } else {
+          ctx.beginPath(); ctx.moveTo(x0, y0);
+          for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x * cssWidth, pts[i].y * cssHeight);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      async function connectSharedCanvas() {
+        const channel = supabase.channel('daily-canvas-presence');
+        channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'canvas_events' }, payload => {
+          const row = payload.new;
+          if (!row || row.session_id === sessionId || row.id <= lastEventId) return;
+          if (!sharedReady) { pendingEvents.push(row); return; }
+          paintSharedStroke(row.payload);
+          lastEventId = Math.max(lastEventId, Number(row.id));
           pushHistory();
-        };
-        img.src = saved;
+        });
+        channel.subscribe(async status => {
+          if (status !== 'SUBSCRIBED' || sharedReady) return;
+          try {
+            const { data, error } = await supabase.from('canvas_events').select('id,session_id,payload').order('id', { ascending: true }).limit(5000);
+            if (error) throw error;
+            for (const row of data || []) {
+              if (row.session_id !== sessionId) paintSharedStroke(row.payload);
+              lastEventId = Math.max(lastEventId, Number(row.id));
+            }
+            sharedReady = true;
+            pendingEvents.sort((a,b) => Number(a.id) - Number(b.id)).forEach(row => {
+              if (Number(row.id) > lastEventId && row.session_id !== sessionId) {
+                paintSharedStroke(row.payload);
+                lastEventId = Number(row.id);
+              }
+            });
+            pendingEvents.length = 0;
+            pushHistory();
+            saveStatus.textContent = 'Connected · shared canvas is live';
+          } catch (error) {
+            console.error('Shared canvas connection failed:', error);
+            saveStatus.textContent = 'Could not connect · refresh to retry';
+            showToast('Could not connect to the shared canvas.');
+          }
+        });
       }
       function setTool(next) {
         tool = next;
@@ -319,9 +377,12 @@
         drawing = true;
         canvas.setPointerCapture?.(event.pointerId);
         lastPoint = pointFromEvent(event);
+        const strokeColor = tool === 'eraser' ? '#ffffff' : color;
+        const strokeSize = tool === 'eraser' ? Math.max(size * 3, 12) : size;
+        currentStroke = { color: strokeColor, size: strokeSize / cssWidth, points: [{ x: lastPoint.x / cssWidth, y: lastPoint.y / cssHeight }] };
         ctx.beginPath();
-        ctx.arc(lastPoint.x, lastPoint.y, Math.max(size / 2, 0.6), 0, Math.PI * 2);
-        ctx.fillStyle = tool === 'eraser' ? '#ffffff' : color;
+        ctx.arc(lastPoint.x, lastPoint.y, Math.max(strokeSize / 2, 0.6), 0, Math.PI * 2);
+        ctx.fillStyle = strokeColor;
         ctx.fill();
         ctx.beginPath();
         ctx.moveTo(lastPoint.x, lastPoint.y);
@@ -332,20 +393,39 @@
         const p = pointFromEvent(event);
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
-        ctx.lineWidth = tool === 'eraser' ? Math.max(size * 3, 12) : size;
+        ctx.strokeStyle = currentStroke.color;
+        ctx.lineWidth = currentStroke.size * cssWidth;
         ctx.lineTo(p.x, p.y);
         ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
         lastPoint = p;
+        if (currentStroke.points.length < 500) currentStroke.points.push({ x: p.x / cssWidth, y: p.y / cssHeight });
       }
-      function endDraw() {
+      async function endDraw() {
         if (!drawing) return;
         drawing = false;
         lastPoint = null;
+        const completed = currentStroke;
+        currentStroke = null;
         pushHistory();
-        scheduleSave();
+        if (!completed || !sharedReady) {
+          showToast('Still connecting — this stroke is only on your screen.');
+          return;
+        }
+        saveStatus.textContent = 'Sharing your stroke…';
+        const { error } = await supabase.from('canvas_events').insert({
+          session_id: sessionId,
+          event_type: 'stroke',
+          payload: completed
+        });
+        if (error) {
+          console.error('Could not publish stroke:', error);
+          saveStatus.textContent = 'Stroke could not be shared';
+          showToast('Your stroke could not be shared. Please try again.');
+        } else {
+          saveStatus.textContent = 'Connected · shared canvas is live';
+        }
       }
       function showToast(message) {
         const toast = document.getElementById('toast');
@@ -374,16 +454,8 @@
         size = Number(sizeInput.value);
         sizeValue.textContent = size;
       });
-      undoBtn.addEventListener('click', () => restore(historyIndex - 1));
-      redoBtn.addEventListener('click', () => restore(historyIndex + 1));
-      document.getElementById('clearBtn').addEventListener('click', () => {
-        if (!confirm('Clear your canvas? This cannot be undone after you leave the page.')) return;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, cssWidth, cssHeight);
-        pushHistory();
-        scheduleSave();
-        showToast('A fresh page.');
-      });
+      undoBtn.disabled = true;
+      redoBtn.disabled = true;
       document.getElementById('saveBtn').addEventListener('click', () => {
         const link = document.createElement('a');
         link.download = 'my-daily-canvas.png';
@@ -399,18 +471,13 @@
       window.addEventListener('keydown', event => {
         const tag = event.target.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-        const mod = event.ctrlKey || event.metaKey;
-        if (mod && event.key.toLowerCase() === 'z') {
-          event.preventDefault();
-          if (event.shiftKey) restore(historyIndex + 1); else restore(historyIndex - 1);
-        } else if (mod && event.key.toLowerCase() === 'y') {
-          event.preventDefault(); restore(historyIndex + 1);
-        } else if (event.key.toLowerCase() === 'b') setTool('brush');
+        if (event.key.toLowerCase() === 'b') setTool('brush');
         else if (event.key.toLowerCase() === 'e') setTool('eraser');
       });
 
       setCanvasSize(false);
       pushHistory();
+      connectSharedCanvas();
       if ('ResizeObserver' in window) {
         let resizeTimer;
         new ResizeObserver(() => {
