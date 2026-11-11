@@ -192,7 +192,6 @@
       const undoBtn = document.getElementById('undoBtn');
       const redoBtn = document.getElementById('redoBtn');
       const saveStatus = document.getElementById('saveStatus');
-      const STORAGE_KEY = 'daily-canvas-art-v1';
       let color = '#292b25';
       let size = 5;
       let tool = 'brush';
@@ -201,7 +200,6 @@
       let currentStroke = null;
       let history = [];
       let historyIndex = -1;
-      let saveTimer = null;
       let toastTimer = null;
       let cssWidth = 0, cssHeight = 0, pixelRatio = 1;
       const sessionId = (() => {
@@ -283,23 +281,10 @@
         historyIndex = index;
         ctx.putImageData(history[historyIndex], 0, 0);
         updateHistoryButtons();
-        scheduleSave();
       }
       function updateHistoryButtons() {
         undoBtn.disabled = historyIndex <= 0;
         redoBtn.disabled = historyIndex >= history.length - 1;
-      }
-      function scheduleSave() {
-        saveStatus.textContent = 'Saving…';
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => {
-          try {
-            localStorage.setItem(STORAGE_KEY, canvas.toDataURL('image/png'));
-            saveStatus.textContent = 'Saved on this device';
-          } catch (err) {
-            saveStatus.textContent = 'Save with the PNG button';
-          }
-        }, 350);
       }
       function loadSaved() { /* Shared artwork is loaded from the database. */ }
 
@@ -338,10 +323,10 @@
         channel.subscribe(async status => {
           if (status !== 'SUBSCRIBED' || sharedReady) return;
           try {
-            const { data, error } = await supabase.from('canvas_events').select('id,session_id,payload').order('id', { ascending: true }).limit(5000);
+            const { data, error } = await supabase.from('canvas_events').select('id,session_id,payload').order('id', { ascending: false }).limit(5000);
             if (error) throw error;
-            for (const row of data || []) {
-              if (row.session_id !== sessionId) paintSharedStroke(row.payload);
+            for (const row of (data || []).reverse()) {
+              paintSharedStroke(row.payload);
               lastEventId = Math.max(lastEventId, Number(row.id));
             }
             sharedReady = true;
@@ -484,13 +469,11 @@
           clearTimeout(resizeTimer);
           resizeTimer = setTimeout(() => {
             setCanvasSize(true);
-            scheduleSave();
           }, 120);
         }).observe(canvas);
       } else {
         window.addEventListener('resize', () => {
           setCanvasSize(true);
-          scheduleSave();
         });
       }
     })();
