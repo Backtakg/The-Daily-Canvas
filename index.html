@@ -49,6 +49,13 @@
     .idea-refresh { flex:none; border:1px solid var(--line); background:transparent; border-radius:9px; padding:8px 11px; color:#66665e; font-size:11px; cursor:pointer; }
     .idea-refresh:hover { background:#f2f0e9; }
     .studio { background:var(--panel); border:1px solid var(--line); border-radius:18px; overflow:hidden; box-shadow:var(--shadow); }
+    .studio.focus-mode { position:fixed; inset:12px; z-index:20; display:flex; flex-direction:column; border-radius:16px; }
+    .studio.focus-mode .canvas-wrap { flex:1; min-height:0; display:flex; }
+    .studio.focus-mode .canvas-frame { flex:1; min-height:0; }
+    .studio.focus-mode canvas { height:100%; min-height:0; }
+    body.focus-mode-active { overflow:hidden; }
+    .focus-backdrop { display:none; }
+    body.focus-mode-active .focus-backdrop { display:block; position:fixed; inset:0; z-index:19; background:rgba(30,31,27,.58); }
     .toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:13px 15px; border-bottom:1px solid var(--line); }
     .tool-group { display:flex; align-items:center; gap:5px; }
     .tool-btn, .action-btn {
@@ -179,6 +186,7 @@
           <div class="tool-group">
             <button class="action-btn" id="undoBtn" title="Undo is unavailable on the shared canvas" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg></button>
             <button class="action-btn" id="redoBtn" title="Redo is unavailable on the shared canvas" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h1"/></svg></button>
+            <button class="action-btn" id="focusModeBtn" type="button" aria-pressed="false" title="Enter focus mode (F)"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg><span class="tool-label">Focus</span></button>
             <button class="action-btn primary" id="saveBtn" title="Save drawing as PNG"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v3h14v-3"/></svg><span class="tool-label">Save</span></button>
           </div>
         </div>
@@ -198,6 +206,7 @@
       <footer><span>One world. One shared canvas.</span><span>Take your time.</span></footer>
     </main>
   </div>
+  <div class="focus-backdrop" aria-hidden="true"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script type="module">
@@ -212,6 +221,8 @@
       const sizeValue = document.getElementById('sizeValue');
       const undoBtn = document.getElementById('undoBtn');
       const redoBtn = document.getElementById('redoBtn');
+      const focusModeBtn = document.getElementById('focusModeBtn');
+      const studio = document.querySelector('.studio');
       const saveStatus = document.getElementById('saveStatus');
       let color = '#292b25';
       let size = 5;
@@ -566,6 +577,16 @@
       });
       undoBtn.disabled = true;
       redoBtn.disabled = true;
+      function setFocusMode(enabled) {
+        studio.classList.toggle('focus-mode', enabled);
+        document.body.classList.toggle('focus-mode-active', enabled);
+        focusModeBtn.setAttribute('aria-pressed', String(enabled));
+        focusModeBtn.title = enabled ? 'Exit focus mode (Esc)' : 'Enter focus mode (F)';
+        focusModeBtn.querySelector('.tool-label').textContent = enabled ? 'Exit' : 'Focus';
+        requestAnimationFrame(() => setCanvasSize(true));
+      }
+      focusModeBtn.addEventListener('click', () => setFocusMode(!studio.classList.contains('focus-mode')));
+      document.querySelector('.focus-backdrop').addEventListener('click', () => setFocusMode(false));
       document.getElementById('saveBtn').addEventListener('click', () => {
         const link = document.createElement('a');
         link.download = 'my-daily-canvas.png';
@@ -586,7 +607,9 @@
       window.addEventListener('keydown', event => {
         const tag = event.target.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-        if (event.key.toLowerCase() === 'b') setTool('brush');
+        if (event.key === 'Escape' && studio.classList.contains('focus-mode')) setFocusMode(false);
+        else if (event.key.toLowerCase() === 'f') setFocusMode(!studio.classList.contains('focus-mode'));
+        else if (event.key.toLowerCase() === 'b') setTool('brush');
         else if (event.key.toLowerCase() === 'e') setTool('eraser');
       });
 
