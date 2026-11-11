@@ -85,6 +85,8 @@
     .action-btn.primary:hover { background:#41433b; }
     .canvas-wrap { padding:17px; background:#f0eee7; }
     .canvas-frame { position:relative; overflow:hidden; border-radius:10px; background:white; box-shadow:0 2px 8px rgba(0,0,0,.045); }
+    .canvas-grid { display:none; position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.22; background-image:radial-gradient(#85857c .8px, transparent .8px); background-size:22px 22px; }
+    .canvas-frame.grid-visible .canvas-grid { display:block; }
     canvas { display:block; width:100%; height:min(61vh, 620px); min-height:340px; background:#fff; touch-action:none; cursor:crosshair; }
     .remote-cursors { position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:3; }
     .remote-cursor { position:absolute; left:0; top:0; transform:translate(-2px,-2px); transition:left .045s linear, top .045s linear; will-change:left,top; }
@@ -186,6 +188,7 @@
           <div class="tool-group">
             <button class="action-btn" id="undoBtn" title="Undo is unavailable on the shared canvas" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg></button>
             <button class="action-btn" id="redoBtn" title="Redo is unavailable on the shared canvas" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h1"/></svg></button>
+            <button class="action-btn" id="gridBtn" type="button" aria-pressed="false" title="Toggle drawing guide grid" aria-label="Toggle drawing guide grid"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18m6-18v18"/></svg><span class="tool-label">Grid</span></button>
             <button class="action-btn" id="focusModeBtn" type="button" aria-pressed="false" title="Enter focus mode (F)"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg><span class="tool-label">Focus</span></button>
             <button class="action-btn primary" id="saveBtn" title="Save drawing as PNG"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v3h14v-3"/></svg><span class="tool-label">Save</span></button>
           </div>
@@ -193,6 +196,7 @@
         <div class="canvas-wrap">
           <div class="canvas-frame">
             <canvas id="canvas" aria-label="Your drawing canvas. Use a mouse, finger, or stylus to draw."></canvas>
+            <div class="canvas-grid" aria-hidden="true"></div>
             <div class="remote-cursors" id="remoteCursors" aria-hidden="true"></div>
             <div class="canvas-hint">YOUR CANVAS · YOUR PACE</div>
           </div>
@@ -222,6 +226,8 @@
       const undoBtn = document.getElementById('undoBtn');
       const redoBtn = document.getElementById('redoBtn');
       const focusModeBtn = document.getElementById('focusModeBtn');
+      const gridBtn = document.getElementById('gridBtn');
+      const canvasFrame = document.querySelector('.canvas-frame');
       const studio = document.querySelector('.studio');
       const saveStatus = document.getElementById('saveStatus');
       let color = '#292b25';
@@ -586,6 +592,13 @@
         requestAnimationFrame(() => setCanvasSize(true));
       }
       focusModeBtn.addEventListener('click', () => setFocusMode(!studio.classList.contains('focus-mode')));
+      gridBtn.addEventListener('click', () => {
+        const enabled = canvasFrame.classList.toggle('grid-visible');
+        gridBtn.classList.toggle('active', enabled);
+        gridBtn.setAttribute('aria-pressed', String(enabled));
+        gridBtn.title = enabled ? 'Hide drawing guide grid' : 'Show drawing guide grid';
+        showToast(enabled ? 'Drawing guide on.' : 'Drawing guide off.');
+      });
       document.querySelector('.focus-backdrop').addEventListener('click', () => setFocusMode(false));
       document.getElementById('saveBtn').addEventListener('click', () => {
         const link = document.createElement('a');
