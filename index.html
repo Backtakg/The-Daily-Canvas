@@ -861,26 +861,16 @@
         zoomInBtn.disabled = zoom >= 8;
         renderCanvasLedger();
       }
-      function setZoom(nextZoom) {
+      function setZoom(nextZoom, anchorX = cssWidth / 2, anchorY = cssHeight / 2) {
         const next = Math.max(0.1, Math.min(8, nextZoom));
-        // Keep the visible artwork in view when zooming, rather than zooming
-        // around an empty origin and making strokes appear to vanish off-screen.
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const row of canvasStrokes) {
-          if (hiddenStrokeIds.has(String(row.id)) || !Array.isArray(row.payload?.points)) continue;
-          const world = row.payload.space === 'world-v1';
-          for (const point of row.payload.points) {
-            const x = Number(point.x) * (world ? 1000 : cssWidth);
-            const y = Number(point.y) * (world ? 1000 : cssHeight);
-            if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-          }
-        }
-        if (Number.isFinite(minX)) {
-          viewX = (minX + maxX) / 2;
-          viewY = (minY + maxY) / 2;
-        }
+        if (next === zoom) return;
+        // Preserve the exact world point beneath the zoom anchor. Never derive
+        // the camera from stroke bounds: doing so makes existing artwork jump
+        // and can move a stroke completely outside the viewport.
+        const worldAtAnchorX = viewX + (anchorX - cssWidth / 2) / zoom;
+        const worldAtAnchorY = viewY + (anchorY - cssHeight / 2) / zoom;
+        viewX = worldAtAnchorX - (anchorX - cssWidth / 2) / next;
+        viewY = worldAtAnchorY - (anchorY - cssHeight / 2) / next;
         zoom = next;
         applyCanvasView();
       }
@@ -1249,7 +1239,7 @@
       redoBtn.addEventListener('click', redoOwnStroke);
       zoomOutBtn.addEventListener('click', () => setZoom(zoom - 0.25));
       zoomInBtn.addEventListener('click', () => setZoom(zoom + 0.25));
-      zoomResetBtn.addEventListener('click', () => { zoom = 1; viewX = cssWidth / 2; viewY = cssHeight / 2; applyCanvasView(); });
+      zoomResetBtn.addEventListener('click', () => setZoom(1));
       panModeBtn.addEventListener('click', () => setPanMode(!panMode));
       applyCanvasView();
       brushBtn.addEventListener('click', () => setTool('brush'));
