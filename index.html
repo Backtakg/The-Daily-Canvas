@@ -85,7 +85,8 @@
     .toolbar-spacer { flex:1; }
     .action-btn { color:#66665e; }
     .action-btn:disabled { opacity:.3; cursor:not-allowed; }
-    #undoBtn, #redoBtn { display:none; }
+    #undoBtn, #redoBtn { display:inline-flex; }
+    #undoBtn:disabled, #redoBtn:disabled { opacity:.3; cursor:not-allowed; }
     .action-btn.primary { background:var(--accent); color:white; padding:0 14px; }
     .action-btn.primary:hover { background:#41433b; }
     .palette-maker { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:12px 15px; border-bottom:1px solid var(--line); background:#fffefa; }
@@ -288,6 +289,8 @@
       <div class="shortcut-row"><span>Select line tool</span><kbd>L</kbd></div>
       <div class="shortcut-row"><span>Select rectangle tool</span><kbd>R</kbd></div>
       <div class="shortcut-row"><span>Select ellipse tool</span><kbd>O</kbd></div>
+      <div class="shortcut-row"><span>Undo your last stroke</span><kbd>Ctrl / ⌘ Z</kbd></div>
+      <div class="shortcut-row"><span>Redo your last undone stroke</span><kbd>Ctrl / ⌘ ⇧ Z</kbd></div>
       <div class="shortcut-row"><span>Enter / exit focus mode</span><kbd>F</kbd></div>
       <div class="shortcut-row"><span>Exit focus mode or close this panel</span><kbd>Esc</kbd></div>
     </div>
@@ -339,6 +342,10 @@
       let linePreview = null;
       let history = [];
       let historyIndex = -1;
+      const canvasStrokes = [];
+      const undoStack = [];
+      const redoStack = [];
+      const hiddenStrokeIds = new Set();
       let toastTimer = null;
       let cssWidth = 0, cssHeight = 0, pixelRatio = 1;
       const sessionId = (() => {
@@ -393,27 +400,12 @@
       }).format(new Date());
 
       function setCanvasSize(preserve = true) {
-        const old = document.createElement('canvas');
-        if (preserve && canvas.width && canvas.height) {
-          old.width = canvas.width; old.height = canvas.height;
-          old.getContext('2d').drawImage(canvas, 0, 0);
-        }
         cssWidth = Math.max(1, canvasFrame.clientWidth);
         cssHeight = Math.max(1, canvasFrame.clientHeight);
         pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
         canvas.width = Math.round(cssWidth * pixelRatio);
         canvas.height = Math.round(cssHeight * pixelRatio);
-        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, cssWidth, cssHeight);
-        if (preserve && old.width && old.height) {
-          ctx.drawImage(old, 0, 0, old.width, old.height, 0, 0, cssWidth, cssHeight);
-          // Old undo snapshots use the previous canvas dimensions.
-          // Start a fresh history at the new size to keep undo reliable.
-          history = [];
-          historyIndex = -1;
-          pushHistory();
-        }
+        renderCanvasLedger();
       }
 
       function snapshot() {
@@ -433,8 +425,39 @@
         updateHistoryButtons();
       }
       function updateHistoryButtons() {
-        undoBtn.disabled = historyIndex <= 0;
-        redoBtn.disabled = historyIndex >= history.length - 1;
+        undoBtn.disabled = drawing || undoStack.length === 0;
+        redoBtn.disabled = drawing || redoStack.length === 0;
+      }
+      function renderCanvasLedger() {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        const ordered = [...canvasStrokes].sort((a, b) => {
+          const left = Number(a.id), right = Number(b.id);
+          return (Number.isFinite(left) ? left : Number.MAX_SAFE_INTEGER) - (Number.isFinite(right) ? right : Number.MAX_SAFE_INTEGER);
+        });
+        ordered.forEach(row => {
+          if (!hiddenStrokeIds.has(String(row.id))) paintSharedStroke(row.payload);
+        });
+      }
+      function undoOwnStroke() {
+        if (drawing || !undoStack.length) return;
+        const id = undoStack.pop();
+        hiddenStrokeIds.add(String(id));
+        redoStack.push(id);
+        renderCanvasLedger();
+        updateHistoryButtons();
+        showToast('Your last stroke was hidden on this device.');
+      }
+      function redoOwnStroke() {
+        if (drawing || !redoStack.length) return;
+        const id = redoStack.pop();
+        hiddenStrokeIds.delete(String(id));
+        undoStack.push(id);
+        renderCanvasLedger();
+        updateHistoryButtons();
+        showToast('Your stroke is visible again.');
       }
       function loadSaved() { /* Shared artwork is loaded from the database. */ }
 
@@ -487,10 +510,10 @@
           const row = payload.new;
           if (!row || row.session_id === sessionId || row.id <= lastEventId) return;
           if (!sharedReady) { pendingEvents.push(row); return; }
-          paintSharedStroke(row.payload);
+          canvasStrokes.push(row);
+          renderCanvasLedger();
           lastEventId = Math.max(lastEventId, Number(row.id));
           announceActivity();
-          pushHistory();
         });
         channel.subscribe(async status => {
           if (status === 'SUBSCRIBED') {
@@ -506,18 +529,22 @@
             const { data, error } = await supabase.from('canvas_events').select('id,session_id,payload').order('id', { ascending: false }).limit(5000);
             if (error) throw error;
             for (const row of (data || []).reverse()) {
-              paintSharedStroke(row.payload);
+              canvasStrokes.push(row);
+              if (row.session_id === sessionId) undoStack.push(row.id);
               lastEventId = Math.max(lastEventId, Number(row.id));
             }
+            renderCanvasLedger();
+            updateHistoryButtons();
             sharedReady = true;
             pendingEvents.sort((a,b) => Number(a.id) - Number(b.id)).forEach(row => {
               if (Number(row.id) > lastEventId && row.session_id !== sessionId) {
-                paintSharedStroke(row.payload);
+                canvasStrokes.push(row);
                 lastEventId = Number(row.id);
               }
             });
             pendingEvents.length = 0;
-            pushHistory();
+            renderCanvasLedger();
+            updateHistoryButtons();
             saveStatus.textContent = 'Connected · shared canvas is live';
           } catch (error) {
             console.error('Shared canvas connection failed:', error);
@@ -753,17 +780,29 @@
         const completed = currentStroke;
         currentStroke = null;
         linePreview = null;
-        pushHistory();
         if (!completed || !sharedReady) {
           showToast('Still connecting — this stroke is only on your screen.');
           return;
         }
         saveStatus.textContent = 'Sharing your stroke…';
-        const { error } = await supabase.from('canvas_events').insert({
+        const localStrokeId = 'local-' + crypto.randomUUID();
+        canvasStrokes.push({ id: localStrokeId, session_id: sessionId, payload: completed });
+        undoStack.push(localStrokeId);
+        redoStack.length = 0;
+        updateHistoryButtons();
+        const { data: inserted, error } = await supabase.from('canvas_events').insert({
           session_id: sessionId,
           event_type: 'stroke',
           payload: completed
-        });
+        }).select('id').single();
+        if (inserted?.id) {
+          const localRow = canvasStrokes.find(row => String(row.id) === localStrokeId);
+          if (localRow) localRow.id = inserted.id;
+          const undoIndex = undoStack.indexOf(localStrokeId);
+          if (undoIndex !== -1) undoStack[undoIndex] = inserted.id;
+          if (hiddenStrokeIds.delete(localStrokeId)) hiddenStrokeIds.add(String(inserted.id));
+          updateHistoryButtons();
+        }
         if (error) {
           console.error('Could not publish stroke:', error);
           saveStatus.textContent = 'Stroke could not be shared';
@@ -796,6 +835,10 @@
         toastTimer = setTimeout(() => toast.classList.remove('show'), 1900);
       }
 
+      undoBtn.title = 'Undo your last stroke (Ctrl/⌘ Z)';
+      redoBtn.title = 'Redo your last undone stroke (Ctrl/⌘ Shift Z)';
+      undoBtn.addEventListener('click', undoOwnStroke);
+      redoBtn.addEventListener('click', redoOwnStroke);
       zoomOutBtn.addEventListener('click', () => setZoom(zoom - 0.25));
       zoomInBtn.addEventListener('click', () => setZoom(zoom + 0.25));
       zoomResetBtn.addEventListener('click', () => { zoom = 1; panX = 0; panY = 0; applyCanvasView(); });
@@ -967,7 +1010,17 @@
       window.addEventListener('keydown', event => {
         const tag = event.target.tagName;
         if (shortcutsDialog.open) { if (event.key === 'Escape') shortcutsDialog.close(); return; }
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+          event.preventDefault();
+          if (event.shiftKey) redoOwnStroke(); else undoOwnStroke();
+          return;
+        }
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+          event.preventDefault();
+          redoOwnStroke();
+          return;
+        }
         if (event.key === 'Escape' && studio.classList.contains('focus-mode')) setFocusMode(false);
         else if (event.key.toLowerCase() === 'f') setFocusMode(!studio.classList.contains('focus-mode'));
         else if (event.key.toLowerCase() === 'b') setTool('brush');
@@ -978,7 +1031,7 @@
       });
 
       setCanvasSize(false);
-      pushHistory();
+      updateHistoryButtons();
       connectSharedCanvas();
       if ('ResizeObserver' in window) {
         let resizeTimer;
