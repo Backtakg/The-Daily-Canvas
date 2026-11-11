@@ -675,35 +675,36 @@
         const currentCanvas = canvasList.find(item => item.id === canvasId);
         if (activeNameEl && currentCanvas) activeNameEl.textContent = currentCanvas.name;
 
-        // One channel carries presence, cursors, and saved drawing changes.
-        // A single subscription avoids split-channel state and keeps all live UI in sync.
+        // Keep presence/cursors separate from Postgres Changes. A failure in one
+        // stream must not prevent the other stream from joining.
         const presenceKey = makeClientId();
-        const channel = supabase.channel('daily-canvas-' + canvasId, {
+        const presence = supabase.channel('daily-presence-' + canvasId, {
           config: { presence: { key: presenceKey }, broadcast: { self: false } }
         });
-        sharedChannel = channel;
-        presenceChannel = channel;
+        const artwork = supabase.channel('daily-artwork-' + canvasId);
+        presenceChannel = presence;
+        sharedChannel = artwork;
 
         function updateOnlineCount(includeSelf = false) {
-          const state = channel.presenceState() || {};
+          const state = presence.presenceState() || {};
           const count = Math.max(includeSelf ? 1 : 0, Object.keys(state).length);
           onlineCountEl.textContent = String(count);
           liveDot.classList.add('connected');
           liveDot.classList.remove('offline');
           onlineStatus?.setAttribute('aria-label', count + (count === 1 ? ' person connected to this canvas worldwide' : ' people connected to this canvas worldwide'));
         }
-        function markOffline(message) {
+        function markPresenceOffline(message) {
           liveDot.classList.remove('connected');
           liveDot.classList.add('offline');
           onlineCountEl.textContent = '—';
+          onlineStatus?.setAttribute('aria-label', 'Live visitor count unavailable');
           saveStatus.textContent = message;
-          onlineStatus?.setAttribute('aria-label', 'Live connection unavailable');
         }
 
-        channel.on('presence', { event: 'sync' }, () => updateOnlineCount());
-        channel.on('presence', { event: 'join' }, () => updateOnlineCount());
-        channel.on('presence', { event: 'leave' }, () => updateOnlineCount());
-        channel.on('broadcast', { event: 'cursor' }, message => {
+        presence.on('presence', { event: 'sync' }, () => updateOnlineCount());
+        presence.on('presence', { event: 'join' }, () => updateOnlineCount());
+        presence.on('presence', { event: 'leave' }, () => updateOnlineCount());
+        presence.on('broadcast', { event: 'cursor' }, message => {
           const data = message.payload || message;
           if (!data || !data.id || data.id === cursorId) return;
           if (data.hidden) { removeRemoteCursor(data.id); return; }
@@ -711,7 +712,7 @@
           showRemoteCursor(data);
         });
 
-        channel.on('postgres_changes', {
+        artwork.on('postgres_changes', {
           event: 'INSERT', schema: 'public', table: 'canvas_events',
           filter: 'canvas_id=eq.' + canvasId
         }, payload => {
@@ -724,15 +725,14 @@
           lastEventId = Math.max(lastEventId, Number(row.id));
           announceActivity();
         });
-        channel.on('postgres_changes', {
+        artwork.on('postgres_changes', {
           event: '*', schema: 'public', table: 'canvases'
         }, () => refreshCanvasList());
 
-        channel.subscribe((status, subscribeError) => {
+        presence.subscribe((status, subscribeError) => {
           if (switchToken !== channelSwitchToken) return;
           if (status === 'SUBSCRIBED') {
-            saveStatus.textContent = 'Live connection established · joining the canvas…';
-            channel.track({ active: true, canvas_id: canvasId, joined_at: new Date().toISOString() })
+            presence.track({ active: true, canvas_id: canvasId, joined_at: new Date().toISOString() })
               .then(trackStatus => {
                 if (switchToken !== channelSwitchToken) return;
                 if (trackStatus !== 'ok') throw new Error('Presence tracking returned: ' + trackStatus);
@@ -740,9 +740,17 @@
               })
               .catch(error => {
                 console.error('Presence tracking failed:', error);
-                markOffline('Drawing channel connected · visitor count unavailable');
+                markPresenceOffline('Drawing can connect · live visitor count unavailable');
               });
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.error('Presence Realtime error:', status, subscribeError || '');
+            markPresenceOffline('Live visitor count unavailable · reconnecting');
+          }
+        });
 
+        artwork.subscribe((status, subscribeError) => {
+          if (switchToken !== channelSwitchToken) return;
+          if (status === 'SUBSCRIBED') {
             (async () => {
               try {
                 const { data, error } = await supabase.from('canvas_events')
@@ -774,15 +782,16 @@
                 saveStatus.textContent = 'Connected · drawing is live worldwide';
               } catch (error) {
                 console.error('Could not sync shared artwork:', error);
-                saveStatus.textContent = 'Live visitors connected · artwork could not be loaded';
+                saveStatus.textContent = 'Live channel joined · artwork could not be loaded';
                 showToast('Could not load shared artwork. Check your connection and refresh.');
               }
             })();
           } else if (status === 'SUBSCRIBING') {
             saveStatus.textContent = 'Connecting to the shared world…';
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.error('Shared canvas Realtime error:', status, subscribeError || '');
-            markOffline('Live connection failed · retrying when connection returns');
+            console.error('Artwork Realtime error:', status, subscribeError || '');
+            sharedReady = false;
+            saveStatus.textContent = 'Live drawing connection failed · reconnecting';
           }
         });
       }
