@@ -308,7 +308,6 @@
           <select id="canvasSelect" aria-label="Choose a canvas"><option value="">Loading canvases…</option></select>
           <span class="manager-spacer"></span>
           <button id="renameCanvasBtn" type="button" title="Rename this canvas">Rename</button>
-          <button id="newPrivateCanvasBtn" type="button" title="Create a private canvas saved only on this device">+ Private</button>
           <button id="newGroupCanvasBtn" type="button" title="Create a private group canvas and invite friends">+ Group</button>
           <button id="inviteGroupBtn" type="button" title="Copy a private invitation link" hidden>Invite</button>
           <button id="newCanvasBtn" type="button" title="Create another shared canvas">+ Shared</button>
@@ -1452,7 +1451,6 @@
       }
       canvasSelect.addEventListener('change', () => switchCanvas(canvasSelect.value));
       document.getElementById('newCanvasBtn').addEventListener('click', createCanvas);
-      document.getElementById('newPrivateCanvasBtn').addEventListener('click', createPrivateCanvas);
       document.getElementById('newGroupCanvasBtn').addEventListener('click', createPrivateGroupCanvas);
       document.getElementById('inviteGroupBtn').addEventListener('click', inviteToGroup);
       document.getElementById('renameCanvasBtn').addEventListener('click', renameCanvas);
