@@ -144,30 +144,88 @@
     .toast { position:fixed; bottom:24px; left:50%; transform:translate(-50%, 12px); background:#282923; color:#fff; padding:10px 15px; border-radius:30px; font-size:12px; opacity:0; pointer-events:none; transition:.22s; box-shadow:0 8px 25px #0002; }
     .toast.show { opacity:1; transform:translate(-50%, 0); }
     @media (max-width:700px) {
+      body { min-width:320px; }
       .shell { width:calc(100% - 24px); }
-      header { padding:19px 0 16px; }
+      header { padding:16px 0 13px; }
+      .brand { gap:8px; }
+      .brand-mark { width:28px; height:28px; }
+      .brand-name { font-size:14px; }
       .header-note { display:none; }
       .header-live { font-size:10px; }
-      main { padding-top:20px; }
-      .intro { align-items:start; }
+      main { padding:15px 0 34px; }
+      .intro { align-items:flex-start; gap:8px; margin-bottom:16px; }
+      h1 { font-size:clamp(29px, 8vw, 38px); }
+      .subtitle { font-size:12px; margin-top:7px; }
+      .eyebrow { margin-bottom:7px; }
       .today { font-size:10px; }
-      .toolbar { gap:7px; padding:10px; }
-      .toolbar-spacer { display:none; }
-      .size-wrap { margin-left:0; flex:1; justify-content:flex-end; }
-      input[type="range"] { width:75px; }
-      .tool-btn, .action-btn { height:34px; min-width:34px; padding:0 8px; }
-      .canvas-wrap { padding:8px; }
-      .canvas-frame { height:58vh; min-height:310px; }
-      canvas { height:100%; min-height:0; }
-      .bottomline { padding:10px 12px; }
-      footer { font-size:10px; }
+      .daily-idea { gap:10px; padding:12px; margin-bottom:10px; border-radius:12px; }
+      .idea-text { font-size:12px; line-height:1.4; }
+      .idea-refresh { padding:9px 10px; white-space:nowrap; }
+      .studio { border-radius:14px; }
+      .toolbar { display:flex; flex-direction:column; align-items:stretch; gap:9px; padding:10px; }
+      .toolbar > .tool-group:first-child { order:1; display:flex; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding:1px 1px 5px; scrollbar-width:thin; }
+      .toolbar > .palette { order:2; display:flex; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding:4px 2px 6px; scrollbar-width:thin; }
+      .toolbar > .size-wrap { order:3; margin:0; flex:none; justify-content:flex-start; gap:10px; min-height:34px; }
+      .toolbar > .surface-control { order:4; min-height:34px; }
+      .toolbar > .tool-group:last-child { order:5; display:flex; flex-wrap:wrap; gap:5px; padding-top:7px; border-top:1px solid var(--line); }
+      .toolbar > .separator, .toolbar > .toolbar-spacer { display:none; }
+      .tool-btn, .action-btn { height:40px; min-width:40px; padding:0 9px; flex:none; }
+      .palette { gap:9px; }
+      .swatch { width:24px; height:24px; flex:none; }
+      .custom-color { width:29px; height:29px; flex:none; }
+      .shape-fill-control { font-size:10px; }
+      .shape-fill-control .custom-color, .studio-color { width:26px; height:26px; }
+      .size-wrap { font-size:12px; }
+      input[type="range"] { width:min(48vw, 190px); min-height:28px; }
+      .surface-control { font-size:11px; }
+      .surface-control select { max-width:none; flex:1; min-width:0; height:36px; }
+      .palette-maker { display:grid; grid-template-columns:auto minmax(0,1fr); gap:8px; padding:11px 12px; }
+      .palette-maker-title { grid-column:1 / -1; }
+      .palette-maker select { width:100%; min-width:0; height:38px; }
+      .palette-maker .action-btn { height:38px; white-space:nowrap; }
+      .palette-generated { grid-column:1 / -1; display:flex; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding:3px 1px 5px; scrollbar-width:thin; }
+      .generated-swatch { flex:none; min-height:34px; }
+      .canvas-wrap { padding:7px; }
+      .canvas-frame { height:clamp(300px, 54svh, 560px); min-height:280px; border-radius:8px; }
+      canvas { width:100%; height:100%; min-height:0; }
+      .canvas-hint { right:9px; bottom:9px; font-size:9px; }
+      .bottomline { display:flex; flex-wrap:wrap; gap:7px 12px; padding:10px 11px; font-size:10px; }
+      .bottomline > span:last-child { width:100%; }
+      footer { gap:8px; font-size:10px; padding-top:14px; }
+      .toast { bottom:max(16px, env(safe-area-inset-bottom)); width:max-content; max-width:calc(100% - 28px); text-align:center; }
+      .studio.focus-mode { inset:env(safe-area-inset-top) 6px env(safe-area-inset-bottom); border-radius:12px; }
+      .studio.focus-mode .toolbar { max-height:34svh; overflow-y:auto; }
+      .studio.focus-mode .canvas-wrap { padding:6px; }
+      .studio.focus-mode .canvas-frame { height:auto; min-height:0; }
     }
     @media (max-width:420px) {
-      .tool-label { display:none; }
+      .shell { width:calc(100% - 18px); }
+      header { padding-top:13px; }
       .intro { display:block; }
-      .today { text-align:left; margin-top:12px; }
-      .palette { gap:5px; }
-      .swatch { width:19px; height:19px; }
+      .today { text-align:left; margin-top:9px; }
+      .tool-label { display:none; }
+      .toolbar > .tool-group:first-child { gap:4px; }
+      .tool-btn { width:40px; padding:0; }
+      .toolbar > .tool-group:last-child { gap:4px; }
+      .toolbar > .tool-group:last-child > .action-btn { min-width:38px; padding:0 7px; }
+      .zoom-controls { display:flex; align-items:center; gap:2px; }
+      .zoom-controls .action-btn { width:34px; min-width:34px; height:38px; padding:0; }
+      .zoom-level { min-width:36px; }
+      .bottomline > span:last-child { line-height:1.4; }
+    }
+    @media (max-width:360px) {
+      .shell { width:calc(100% - 14px); }
+      .toolbar { padding:8px; }
+      .tool-btn { min-width:37px; width:37px; height:38px; }
+      .toolbar > .tool-group:last-child > .action-btn { min-width:35px; }
+      .zoom-controls .action-btn { width:32px; min-width:32px; }
+      .zoom-level { min-width:32px; }
+      .daily-idea { align-items:flex-start; }
+      .idea-refresh { font-size:10px; }
+    }
+    @media (max-height:560px) and (max-width:700px) {
+      .canvas-frame { height:360px; }
+      .studio.focus-mode .toolbar { max-height:40svh; }
     }
   </style>
 </head>
