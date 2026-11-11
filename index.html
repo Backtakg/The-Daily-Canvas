@@ -68,6 +68,7 @@
     .toolbar-spacer { flex:1; }
     .action-btn { color:#66665e; }
     .action-btn:disabled { opacity:.3; cursor:not-allowed; }
+    #undoBtn, #redoBtn { display:none; }
     .action-btn.primary { background:var(--accent); color:white; padding:0 14px; }
     .action-btn.primary:hover { background:#41433b; }
     .canvas-wrap { padding:17px; background:#f0eee7; }
@@ -203,8 +204,8 @@
       let toastTimer = null;
       let cssWidth = 0, cssHeight = 0, pixelRatio = 1;
       const sessionId = (() => {
-        let id = localStorage.getItem('daily-canvas-session');
-        if (!id) { id = crypto.randomUUID(); localStorage.setItem('daily-canvas-session', id); }
+        let id = sessionStorage.getItem('daily-canvas-session');
+        if (!id) { id = crypto.randomUUID(); sessionStorage.setItem('daily-canvas-session', id); }
         return id;
       })();
       let sharedReady = false;
