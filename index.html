@@ -51,7 +51,8 @@
     .studio { background:var(--panel); border:1px solid var(--line); border-radius:18px; overflow:hidden; box-shadow:var(--shadow); }
     .canvas-manager { display:flex; align-items:center; gap:9px; padding:12px 15px; border-bottom:1px solid var(--line); background:rgba(255,254,250,.55); }
     .canvas-manager-label { color:#85847b; font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
-    .canvas-current-name { min-width:0; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink); font-size:12px; font-weight:650; letter-spacing:-.015em; }\n    .canvas-manager select { min-width:0; max-width:min(260px,42vw); height:34px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:#fffefa; color:var(--ink); font:inherit; font-size:12px; }
+    .canvas-current-name { min-width:0; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink); font-size:12px; font-weight:650; letter-spacing:-.015em; }
+    .canvas-manager select { min-width:0; max-width:min(260px,42vw); height:34px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:#fffefa; color:var(--ink); font:inherit; font-size:12px; }
     .canvas-manager button { min-height:34px; padding:0 11px; border:1px solid var(--line); border-radius:8px; background:transparent; color:#66665e; font:inherit; font-size:11px; cursor:pointer; }
     .canvas-manager button:hover { background:#f2f0e9; }
     .canvas-manager .manager-spacer { flex:1; }
@@ -162,12 +163,15 @@
       .idea-refresh { padding:9px 10px; white-space:nowrap; }
       .studio { border-radius:14px; }
       .toolbar { display:flex; flex-direction:column; align-items:stretch; gap:9px; padding:10px; }
-      .toolbar > .tool-group:first-child { order:1; display:flex; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding:1px 1px 5px; scrollbar-width:thin; }
-      .toolbar > .palette { order:2; display:flex; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding:4px 2px 6px; scrollbar-width:thin; }
-      .toolbar > .size-wrap { order:3; margin:0; flex:none; justify-content:flex-start; gap:10px; min-height:34px; }
-      .toolbar > .surface-control { order:4; min-height:34px; }
-      .toolbar > .tool-group:last-child { order:5; display:flex; flex-wrap:wrap; gap:5px; padding-top:7px; border-top:1px solid var(--line); }
+      .toolbar > .tool-group:last-child { order:1; display:flex; flex-wrap:nowrap; align-items:center; justify-content:space-between; gap:5px; width:100%; min-width:0; padding:0 0 8px; border-bottom:1px solid var(--line); }
+      .toolbar > .tool-group:first-child { order:2; display:flex; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding:1px 1px 5px; scrollbar-width:thin; }
+      .toolbar > .palette { order:3; display:flex; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding:4px 2px 6px; scrollbar-width:thin; }
+      .toolbar > .size-wrap { order:4; margin:0; flex:none; justify-content:flex-start; gap:10px; min-height:34px; }
+      .toolbar > .surface-control { order:5; min-height:34px; }
       .toolbar > .separator, .toolbar > .toolbar-spacer { display:none; }
+      .toolbar > .tool-group:last-child > .action-btn { flex:none; min-width:36px; height:38px; padding:0 7px; }
+      .toolbar > .tool-group:last-child .zoom-controls { display:flex; flex:none; align-items:center; gap:2px; }
+      #undoBtn:disabled, #redoBtn:disabled { opacity:.55; }
       .tool-btn, .action-btn { height:40px; min-width:40px; padding:0 9px; flex:none; }
       .palette { gap:9px; }
       .swatch { width:24px; height:24px; flex:none; }
@@ -300,7 +304,8 @@
       <section class="studio" aria-label="Drawing studio">
         <div class="canvas-manager" aria-label="Canvas manager">
           <span class="canvas-manager-label">Canvas</span>
-          <select id="canvasSelect" aria-label="Choose a canvas"><option value="">Loading canvases…</option></select>\n          <span class="manager-spacer"></span>
+          <select id="canvasSelect" aria-label="Choose a canvas"><option value="">Loading canvases…</option></select>
+          <span class="manager-spacer"></span>
           <button id="renameCanvasBtn" type="button" title="Rename this canvas">Rename</button>
           <button id="newCanvasBtn" type="button" title="Create another shared canvas">+ New</button>
         </div>
@@ -344,8 +349,8 @@
           <label class="surface-control" for="surfaceSelect"><span>Studio</span><select id="surfaceSelect" aria-label="Choose studio background"><option value="stone">Stone</option><option value="sage">Sage</option><option value="sand">Sand</option><option value="dusk">Mist</option></select><input class="custom-color studio-color" id="studioColor" type="color" value="#f0eee7" aria-label="Choose custom studio background color" title="Custom studio background"></label>
           <span class="toolbar-spacer"></span>
           <div class="tool-group">
-            <button class="action-btn" id="undoBtn" title="Undo is unavailable on the shared canvas" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg></button>
-            <button class="action-btn" id="redoBtn" title="Redo is unavailable on the shared canvas" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h1"/></svg></button>
+            <button class="action-btn" id="undoBtn" title="Undo your last stroke" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg></button>
+            <button class="action-btn" id="redoBtn" title="Redo your last undone stroke" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h1"/></svg></button>
             <div class="zoom-controls" role="group" aria-label="Canvas zoom">
               <button class="action-btn" id="zoomOutBtn" type="button" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
               <span class="zoom-level" id="zoomLevel" aria-live="polite">100%</span>
@@ -620,6 +625,7 @@
           };
         };
         const storedSize = Number(stroke.size);
+        if (!Number.isFinite(storedSize) || !pts.every(point => Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.y)))) return;
         const width = Math.max(0.75, (world ? storedSize * 1000 : storedSize * cssWidth) * zoom);
         ctx.save();
         ctx.strokeStyle = stroke.color;
