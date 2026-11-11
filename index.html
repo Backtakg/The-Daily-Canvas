@@ -74,6 +74,11 @@
     .custom-color { width:27px; height:27px; padding:0; border:0; border-radius:50%; overflow:hidden; background:none; cursor:pointer; }
     .custom-color::-webkit-color-swatch-wrapper { padding:0; }
     .custom-color::-webkit-color-swatch { border:1px solid #d9d6cd; border-radius:50%; }
+    .shape-fill-control { display:flex; align-items:center; gap:5px; color:var(--muted); font-size:10px; white-space:nowrap; }
+    .shape-fill-control .custom-color { width:23px; height:23px; }
+    .studio-color { width:23px; height:23px; }
+    .studio-color::-webkit-color-swatch { border-radius:6px; }
+    .studio-color::-moz-color-swatch { border-radius:6px; }
     .size-wrap { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:11px; margin-left:auto; }
     input[type="range"] { width:90px; accent-color:#393a33; cursor:pointer; }
     .size-value { width:23px; text-align:right; font-variant-numeric:tabular-nums; }
@@ -215,11 +220,12 @@
             <button class="swatch" data-color="#7eaa91" style="background:#7eaa91" aria-label="Sage"></button>
             <button class="swatch" data-color="#7897bd" style="background:#7897bd" aria-label="Blue"></button>
             <button class="swatch" data-color="#a28ab8" style="background:#a28ab8" aria-label="Lavender"></button>
-            <input class="custom-color" id="customColor" type="color" value="#292b25" aria-label="Choose custom color">
+            <input class="custom-color" id="customColor" type="color" value="#292b25" aria-label="Choose custom brush color">
+            <label class="shape-fill-control" title="Color used for filled shapes">Fill color <input class="custom-color" id="shapeFillColor" type="color" value="#e47762" aria-label="Choose filled shape color"></label>
           </div>
           <span class="separator"></span>
           <label class="size-wrap" for="brushSize"><span>Size</span><input id="brushSize" type="range" min="1" max="40" value="5"><span class="size-value" id="sizeValue">5</span></label>
-          <label class="surface-control" for="surfaceSelect"><span>Studio</span><select id="surfaceSelect" aria-label="Choose studio background"><option value="stone">Stone</option><option value="sage">Sage</option><option value="sand">Sand</option><option value="dusk">Mist</option></select></label>
+          <label class="surface-control" for="surfaceSelect"><span>Studio</span><select id="surfaceSelect" aria-label="Choose studio background"><option value="stone">Stone</option><option value="sage">Sage</option><option value="sand">Sand</option><option value="dusk">Mist</option></select><input class="custom-color studio-color" id="studioColor" type="color" value="#f0eee7" aria-label="Choose custom studio background color" title="Custom studio background"></label>
           <span class="toolbar-spacer"></span>
           <div class="tool-group">
             <button class="action-btn" id="undoBtn" title="Undo is unavailable on the shared canvas" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg></button>
@@ -301,6 +307,7 @@
       const studio = document.querySelector('.studio');
       const saveStatus = document.getElementById('saveStatus');
       let color = '#292b25';
+      let shapeFillColor = '#e47762';
       let size = 5;
       let tool = 'brush';
       let fillShapes = false;
@@ -618,7 +625,8 @@
         sendCursor(event, false, true);
         canvas.setPointerCapture?.(event.pointerId);
         lastPoint = pointFromEvent(event);
-        const strokeColor = tool === 'eraser' ? '#ffffff' : color;
+        const isFilledShape = fillShapes && (tool === 'rectangle' || tool === 'ellipse');
+        const strokeColor = tool === 'eraser' ? '#ffffff' : (isFilledShape ? shapeFillColor : color);
         const strokeSize = tool === 'eraser' ? Math.max(size * 3, 12) : size;
         currentStroke = { color: strokeColor, size: strokeSize / cssWidth, points: [{ x: lastPoint.x / cssWidth, y: lastPoint.y / cssHeight }] };
         if (tool === 'line' || tool === 'rectangle' || tool === 'ellipse') {
@@ -799,6 +807,15 @@
         document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
         setTool('brush');
       });
+      const shapeFillInput = document.getElementById('shapeFillColor');
+      const savedShapeFill = localStorage.getItem('daily-canvas-fill-color');
+      if (/^#[0-9a-f]{6}$/i.test(savedShapeFill || '')) shapeFillColor = savedShapeFill;
+      shapeFillInput.value = shapeFillColor;
+      shapeFillInput.addEventListener('input', event => {
+        shapeFillColor = event.target.value;
+        localStorage.setItem('daily-canvas-fill-color', shapeFillColor);
+        showToast('Filled shape color updated.');
+      });
       sizeInput.addEventListener('input', () => {
         size = Number(sizeInput.value);
         sizeValue.textContent = size;
@@ -853,19 +870,34 @@
       });
       const canvasWrap = document.querySelector('.canvas-wrap');
       const surfaceSelect = document.getElementById('surfaceSelect');
-      const savedSurface = localStorage.getItem('daily-canvas-surface');
-      if (['stone', 'sage', 'sand', 'dusk'].includes(savedSurface)) {
-        surfaceSelect.value = savedSurface;
-      }
+      const studioColorInput = document.getElementById('studioColor');
+      const savedStudioColor = localStorage.getItem('daily-canvas-studio-color');
       function applySurface() {
         canvasWrap.dataset.surface = surfaceSelect.value;
+        canvasWrap.style.backgroundColor = '';
         localStorage.setItem('daily-canvas-surface', surfaceSelect.value);
       }
+      function applyCustomStudioColor(value, persist = true) {
+        if (!/^#[0-9a-f]{6}$/i.test(value)) return;
+        canvasWrap.dataset.surface = 'custom';
+        canvasWrap.style.backgroundColor = value;
+        studioColorInput.value = value;
+        if (persist) localStorage.setItem('daily-canvas-studio-color', value);
+      }
+      if (['stone', 'sage', 'sand', 'dusk'].includes(localStorage.getItem('daily-canvas-surface'))) {
+        surfaceSelect.value = localStorage.getItem('daily-canvas-surface');
+      }
       surfaceSelect.addEventListener('change', () => {
+        localStorage.removeItem('daily-canvas-studio-color');
         applySurface();
         showToast('Studio background updated — only you can see this.');
       });
-      applySurface();
+      studioColorInput.addEventListener('input', event => {
+        applyCustomStudioColor(event.target.value);
+        showToast('Custom studio background applied.');
+      });
+      if (savedStudioColor && /^#[0-9a-f]{6}$/i.test(savedStudioColor)) applyCustomStudioColor(savedStudioColor, false);
+      else applySurface();
       document.getElementById('saveBtn').addEventListener('click', () => {
         const link = document.createElement('a');
         link.download = 'my-daily-canvas.png';
