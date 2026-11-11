@@ -192,6 +192,9 @@
             <button class="tool-btn" id="rectangleTool" aria-label="Rectangle tool" title="Rectangle (R)">
               <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1"/></svg><span class="tool-label">Rectangle</span>
             </button>
+            <button class="tool-btn" id="ellipseTool" aria-label="Ellipse tool" title="Circle or ellipse (O)">
+              <svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg><span class="tool-label">Ellipse</span>
+            </button>
           </div>
           <span class="separator"></span>
           <div class="palette" aria-label="Colors">
@@ -242,6 +245,7 @@
       <div class="shortcut-row"><span>Select eraser</span><kbd>E</kbd></div>
       <div class="shortcut-row"><span>Select line tool</span><kbd>L</kbd></div>
       <div class="shortcut-row"><span>Select rectangle tool</span><kbd>R</kbd></div>
+      <div class="shortcut-row"><span>Select ellipse tool</span><kbd>O</kbd></div>
       <div class="shortcut-row"><span>Enter / exit focus mode</span><kbd>F</kbd></div>
       <div class="shortcut-row"><span>Exit focus mode or close this panel</span><kbd>Esc</kbd></div>
     </div>
@@ -259,6 +263,7 @@
       const eraserBtn = document.getElementById('eraserTool');
       const lineBtn = document.getElementById('lineTool');
       const rectangleBtn = document.getElementById('rectangleTool');
+      const ellipseBtn = document.getElementById('ellipseTool');
       const sizeInput = document.getElementById('brushSize');
       const sizeValue = document.getElementById('sizeValue');
       const undoBtn = document.getElementById('undoBtn');
@@ -516,6 +521,7 @@
         eraserBtn.classList.toggle('active', tool === 'eraser');
         lineBtn.classList.toggle('active', tool === 'line');
         rectangleBtn.classList.toggle('active', tool === 'rectangle');
+        ellipseBtn.classList.toggle('active', tool === 'ellipse');
         canvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
       }
       function pointFromEvent(event) {
@@ -532,7 +538,7 @@
         const strokeColor = tool === 'eraser' ? '#ffffff' : color;
         const strokeSize = tool === 'eraser' ? Math.max(size * 3, 12) : size;
         currentStroke = { color: strokeColor, size: strokeSize / cssWidth, points: [{ x: lastPoint.x / cssWidth, y: lastPoint.y / cssHeight }] };
-        if (tool === 'line' || tool === 'rectangle') {
+        if (tool === 'line' || tool === 'rectangle' || tool === 'ellipse' || tool === 'ellipse') {
           linePreview = document.createElement('canvas');
           linePreview.width = canvas.width;
           linePreview.height = canvas.height;
@@ -570,7 +576,7 @@
               { x: lastPoint.x / cssWidth, y: lastPoint.y / cssHeight },
               { x: p.x / cssWidth, y: p.y / cssHeight }
             ];
-          } else {
+          } else if (tool === 'rectangle') {
             ctx.rect(lastPoint.x, lastPoint.y, p.x - lastPoint.x, p.y - lastPoint.y);
             currentStroke.points = [
               { x: lastPoint.x / cssWidth, y: lastPoint.y / cssHeight },
@@ -579,6 +585,21 @@
               { x: lastPoint.x / cssWidth, y: p.y / cssHeight },
               { x: lastPoint.x / cssWidth, y: lastPoint.y / cssHeight }
             ];
+          } else {
+            const centerX = (lastPoint.x + p.x) / 2;
+            const centerY = (lastPoint.y + p.y) / 2;
+            const radiusX = Math.abs(p.x - lastPoint.x) / 2;
+            const radiusY = Math.abs(p.y - lastPoint.y) / 2;
+            ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+            currentStroke.points = [];
+            const segments = 64;
+            for (let i = 0; i <= segments; i++) {
+              const angle = (i / segments) * Math.PI * 2;
+              currentStroke.points.push({
+                x: (centerX + Math.cos(angle) * radiusX) / cssWidth,
+                y: (centerY + Math.sin(angle) * radiusY) / cssHeight
+              });
+            }
           }
           ctx.stroke();
           ctx.restore();
@@ -649,6 +670,7 @@
       eraserBtn.addEventListener('click', () => setTool('eraser'));
       lineBtn.addEventListener('click', () => setTool('line'));
       rectangleBtn.addEventListener('click', () => setTool('rectangle'));
+      ellipseBtn.addEventListener('click', () => setTool('ellipse'));
       document.querySelectorAll('.swatch').forEach(button => {
         button.addEventListener('click', () => {
           color = button.dataset.color;
@@ -756,6 +778,7 @@
         else if (event.key.toLowerCase() === 'e') setTool('eraser');
         else if (event.key.toLowerCase() === 'l') setTool('line');
         else if (event.key.toLowerCase() === 'r') setTool('rectangle');
+        else if (event.key.toLowerCase() === 'o') setTool('ellipse');
       });
 
       setCanvasSize(false);
