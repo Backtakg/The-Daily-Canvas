@@ -850,7 +850,26 @@
         renderCanvasLedger();
       }
       function setZoom(nextZoom) {
-        zoom = Math.max(0.1, Math.min(8, nextZoom));
+        const next = Math.max(0.1, Math.min(8, nextZoom));
+        // Keep the visible artwork in view when zooming, rather than zooming
+        // around an empty origin and making strokes appear to vanish off-screen.
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const row of canvasStrokes) {
+          if (hiddenStrokeIds.has(String(row.id)) || !Array.isArray(row.payload?.points)) continue;
+          const world = row.payload.space === 'world-v1';
+          for (const point of row.payload.points) {
+            const x = Number(point.x) * (world ? 1000 : cssWidth);
+            const y = Number(point.y) * (world ? 1000 : cssHeight);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+          }
+        }
+        if (Number.isFinite(minX)) {
+          viewX = (minX + maxX) / 2;
+          viewY = (minY + maxY) / 2;
+        }
+        zoom = next;
         applyCanvasView();
       }
       function setPanMode(enabled) {
