@@ -392,7 +392,7 @@
       let tool = 'brush';
       let fillShapes = false;
       let zoom = 1;
-      let panX = 0, panY = 0;
+      let viewX = null, viewY = null;
       let panMode = false, isPanning = false, panPointer = null;
       let panStart = null;
       let drawing = false;
@@ -462,8 +462,11 @@
       }).format(new Date());
 
       function setCanvasSize(preserve = true) {
+        const oldWidth = cssWidth, oldHeight = cssHeight;
         cssWidth = Math.max(1, canvasFrame.clientWidth);
         cssHeight = Math.max(1, canvasFrame.clientHeight);
+        if (viewX === null || !preserve) { viewX = cssWidth / 2; viewY = cssHeight / 2; }
+        else { viewX += (cssWidth - oldWidth) / 2; viewY += (cssHeight - oldHeight) / 2; }
         pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
         canvas.width = Math.round(cssWidth * pixelRatio);
         canvas.height = Math.round(cssHeight * pixelRatio);
@@ -528,20 +531,26 @@
       function paintSharedStroke(stroke) {
         if (!stroke || !Array.isArray(stroke.points) || !stroke.points.length) return;
         const pts = stroke.points;
-        const width = Math.max(0.5, Number(stroke.size) * cssWidth);
+        const world = stroke.space === 'world-v1';
+        const toScreen = point => world
+          ? { x: (point.x * 1000 - viewX) * zoom + cssWidth / 2, y: (point.y * 1000 - viewY) * zoom + cssHeight / 2 }
+          : { x: (point.x * cssWidth - viewX) * zoom + cssWidth / 2, y: (point.y * cssHeight - viewY) * zoom + cssHeight / 2 };
+        const width = Math.max(0.5, world ? Number(stroke.size) * 1000 * zoom : Number(stroke.size) * cssWidth * zoom);
         ctx.save();
         ctx.strokeStyle = stroke.color;
         ctx.fillStyle = stroke.color;
         ctx.lineWidth = width;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        const first = pts[0];
-        const x0 = first.x * cssWidth, y0 = first.y * cssHeight;
+        const first = toScreen(pts[0]);
         if (pts.length === 1) {
-          ctx.beginPath(); ctx.arc(x0, y0, width / 2, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(first.x, first.y, width / 2, 0, Math.PI * 2); ctx.fill();
         } else {
-          ctx.beginPath(); ctx.moveTo(x0, y0);
-          for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x * cssWidth, pts[i].y * cssHeight);
+          ctx.beginPath(); ctx.moveTo(first.x, first.y);
+          for (let i = 1; i < pts.length; i++) {
+            const point = toScreen(pts[i]);
+            ctx.lineTo(point.x, point.y);
+          }
           ctx.stroke();
         }
         ctx.restore();
@@ -695,13 +704,14 @@
         canvas.style.cursor = tool === 'eraser' ? 'cell' : tool === 'bucket' ? 'copy' : 'crosshair';
       }
       function applyCanvasView() {
-        canvasWorld.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+        canvasWorld.style.transform = 'none';
         zoomLevel.textContent = Math.round(zoom * 100) + '%';
-        zoomOutBtn.disabled = zoom <= 0.5;
-        zoomInBtn.disabled = zoom >= 3;
+        zoomOutBtn.disabled = zoom <= 0.1;
+        zoomInBtn.disabled = zoom >= 8;
+        renderCanvasLedger();
       }
       function setZoom(nextZoom) {
-        zoom = Math.max(0.5, Math.min(3, nextZoom));
+        zoom = Math.max(0.1, Math.min(8, nextZoom));
         applyCanvasView();
       }
       function setPanMode(enabled) {
@@ -713,7 +723,7 @@
       }
       function pointFromEvent(event) {
         const rect = canvas.getBoundingClientRect();
-        return { x: (event.clientX - rect.left) / zoom, y: (event.clientY - rect.top) / zoom };
+        return { x: event.clientX - rect.left, y: event.clientY - rect.top };
       }
       function makeFilledShapePoints(start, end, shape) {
         const left = Math.min(start.x, end.x);
@@ -814,7 +824,7 @@
           event.preventDefault();
           isPanning = true;
           panPointer = event.pointerId;
-          panStart = { x: event.clientX, y: event.clientY, panX, panY };
+          panStart = { x: event.clientX, y: event.clientY, viewX, viewY };
           canvasFrame.classList.add('is-panning');
           canvas.setPointerCapture?.(event.pointerId);
           return;
@@ -847,8 +857,8 @@
       function draw(event) {
         if (isPanning && event.pointerId === panPointer) {
           event.preventDefault();
-          panX = Math.max(-1800, Math.min(1800, panStart.panX + event.clientX - panStart.x));
-          panY = Math.max(-1800, Math.min(1800, panStart.panY + event.clientY - panStart.y));
+          viewX = panStart.viewX - (event.clientX - panStart.x) / zoom;
+          viewY = panStart.viewY - (event.clientY - panStart.y) / zoom;
           applyCanvasView();
           return;
         }
@@ -941,11 +951,18 @@
           showToast('Still connecting — this stroke is only on your screen.');
           return;
         }
+        completed.points = completed.points.map(point => ({
+          x: (((point.x * cssWidth - cssWidth / 2) / zoom + viewX) / 1000),
+          y: (((point.y * cssHeight - cssHeight / 2) / zoom + viewY) / 1000)
+        }));
+        completed.size = completed.size * cssWidth / 1000;
+        completed.space = 'world-v1';
         saveStatus.textContent = 'Sharing your stroke…';
         const localStrokeId = 'local-' + crypto.randomUUID();
         canvasStrokes.push({ id: localStrokeId, session_id: sessionId, canvas_id: activeCanvasId, payload: completed });
         undoStack.push(localStrokeId);
         redoStack.length = 0;
+        renderCanvasLedger();
         updateHistoryButtons();
         const { data: inserted, error } = await supabase.from('canvas_events').insert({
           session_id: sessionId,
@@ -1053,7 +1070,7 @@
       redoBtn.addEventListener('click', redoOwnStroke);
       zoomOutBtn.addEventListener('click', () => setZoom(zoom - 0.25));
       zoomInBtn.addEventListener('click', () => setZoom(zoom + 0.25));
-      zoomResetBtn.addEventListener('click', () => { zoom = 1; panX = 0; panY = 0; applyCanvasView(); });
+      zoomResetBtn.addEventListener('click', () => { zoom = 1; viewX = cssWidth / 2; viewY = cssHeight / 2; applyCanvasView(); });
       panModeBtn.addEventListener('click', () => setPanMode(!panMode));
       applyCanvasView();
       brushBtn.addEventListener('click', () => setTool('brush'));
