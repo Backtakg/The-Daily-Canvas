@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#f6f4ee">
+<title>Owner access · The Daily Canvas</title>
+<style>
+:root{color-scheme:light;--paper:#f6f4ee;--ink:#24251f;--muted:#85857c;--line:#e6e3da;--panel:#fffefa;--accent:#292b25;--danger:#a34e43}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{width:min(1080px,calc(100% - 32px));margin:auto}header{display:flex;align-items:center;justify-content:space-between;padding:24px 0;border-bottom:1px solid var(--line)}a{color:inherit}.brand{font-weight:700;letter-spacing:-.04em;text-decoration:none}.muted{color:var(--muted)}main{padding:34px 0 60px}.eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}h1{font-size:clamp(28px,5vw,42px);letter-spacing:-.06em;margin:8px 0 6px}h2{font-size:18px;letter-spacing:-.035em;margin:0 0 14px}.sub{font-size:13px;color:var(--muted);line-height:1.55}.panel,.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 10px 35px #2d2b2208}.login{max-width:420px;margin:60px auto}.field{display:grid;gap:7px;margin:18px 0}.field label{font-size:12px;color:#66665e}.field input{height:46px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fff;color:var(--ink);font:inherit}.btn{border:1px solid var(--line);border-radius:9px;background:transparent;padding:10px 13px;font:inherit;font-size:12px;cursor:pointer}.btn:hover{background:#f1efe8}.btn.primary{background:var(--accent);border-color:var(--accent);color:white}.btn.danger{color:var(--danger);border-color:#ead4cf}.btn:disabled{opacity:.5;cursor:wait}.error{color:var(--danger);font-size:12px;min-height:18px}.topline{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:22px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0 30px}.stat{padding:16px;border:1px solid var(--line);border-radius:13px;background:#fffefa}.stat strong{display:block;font-size:26px;letter-spacing:-.05em}.stat span{font-size:11px;color:var(--muted)}.section{margin:30px 0}.list{display:grid;gap:10px}.item{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 15px;border:1px solid var(--line);border-radius:12px;background:#fffefa}.item-main{min-width:0}.item-title{font-size:13px;font-weight:650;overflow-wrap:anywhere}.item-meta{font-size:10px;color:var(--muted);margin-top:5px}.actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex:none}.actions .btn{padding:8px 10px;font-size:11px}.report{align-items:flex-start}.report-details{font-size:12px;line-height:1.55;color:#66665e;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:8px}.empty{padding:20px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:12px}.note{font-size:11px;color:var(--muted);line-height:1.5;margin-top:16px}dialog{width:min(900px,calc(100% - 24px));max-width:900px;border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--panel);color:var(--ink);box-shadow:0 24px 90px #0003}dialog::backdrop{background:#20211c99;backdrop-filter:blur(3px)}.viewer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.viewer-wrap{background:#eeece5;border-radius:10px;overflow:hidden}.viewer-wrap canvas{display:block;width:100%;height:auto;background:white}.viewer-note{font-size:11px;color:var(--muted);margin-top:10px}footer{font-size:10px;color:#a09f96;padding:20px 0 28px}@media(max-width:680px){header{padding:17px 0}.stats{gap:7px}.stat{padding:12px}.stat strong{font-size:22px}.item{align-items:flex-start;flex-direction:column}.actions{justify-content:flex-start}.panel,.card{padding:16px}.login{margin:36px auto}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header><a class="brand" href="./">The Daily Canvas</a><span class="muted" style="font-size:11px">Owner access</span></header>
+<main>
+<section id="loginPanel" class="panel login">
+<div class="eyebrow">Restricted area</div><h1>Welcome back.</h1>
+<p class="sub">This private dashboard is protected by your owner passphrase. Your access token expires automatically after 30 minutes.</p>
+<form id="loginForm">
+<div class="field"><label for="password">Owner passphrase</label><input id="password" type="password" autocomplete="current-password" minlength="24" maxlength="256" required></div>
+<div id="loginError" class="error" role="alert"></div>
+<button class="btn primary" id="loginButton" type="submit" style="width:100%">Unlock owner dashboard</button>
+</form>
+<p class="note">Never share your passphrase. This page is not linked from the public drawing site.</p>
+</section>
+<section id="dashboard" hidden>
+<div class="topline"><div><div class="eyebrow">Private control room</div><h1>Owner dashboard</h1><div class="sub">Manage shared canvases, private group rooms and community reports.</div></div><button id="logout" class="btn">Lock dashboard</button></div>
+<div class="stats"><div class="stat"><strong id="canvasCount">0</strong><span>Shared canvases</span></div><div class="stat"><strong id="groupCount">0</strong><span>Private group rooms</span></div><div class="stat"><strong id="reportCount">0</strong><span>Open reports</span></div></div>
+<section class="section"><h2>Shared canvases</h2><div id="canvases" class="list"></div></section>
+<section class="section"><h2>Private group canvases</h2><p class="sub">These rooms are hidden from the public canvas list. Only you can inspect them here; friends still need their private invite link.</p><div id="groups" class="list"></div></section>
+<section class="section"><h2>Community reports</h2><div id="reports" class="list"></div></section>
+<p class="note">Owner actions are verified on the server. Deleting a canvas or group permanently removes its saved strokes. Private canvases saved only in a visitor's browser are not stored on the server and cannot be viewed here.</p>
+</section>
+<div id="globalError" class="error" role="alert"></div>
+</main>
+<footer>THE DAILY CANVAS · PRIVATE OWNER AREA</footer>
+</div>
+<dialog id="viewer"><div class="viewer-head"><div><strong id="viewerTitle">Canvas preview</strong><div id="viewerCount" class="muted" style="font-size:11px;margin-top:3px"></div></div><button id="closeViewer" class="btn">Close</button></div><div class="viewer-wrap"><canvas id="preview" width="1200" height="720"></canvas></div><div class="viewer-note">Read-only preview of saved artwork. Live visitors are not shown in this snapshot.</div></dialog>
+<script>
+const API="https://lxtwznbwblsdhdqswcgc.supabase.co/functions/v1/daily-canvas-owner";
+const API_KEY="sb_publishable_UK8Lm-amJoSMkb_1JeSZ_w_zaOvC4wg";
+const tokenKey="daily-canvas-owner-session";
+let token=sessionStorage.getItem(tokenKey)||"";
+let overview=null;
+const $=id=>document.getElementById(id);
+const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+const dateText=value=>value?new Date(value).toLocaleString():"";
+async function call(action,data={}){
+ const response=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json","apikey":API_KEY,...(token?{"Authorization":"Bearer "+token}:{})},body:JSON.stringify({action,...data})});
+ let result={};try{result=await response.json()}catch{}
+ if(!response.ok){if(response.status===401&&action!=="login")lock();throw new Error(result.error||"Request failed.")}
+ return result;
+}
+function lock(){
+ token="";sessionStorage.removeItem(tokenKey);$("dashboard").hidden=true;$("loginPanel").hidden=false;
+}
+$("loginForm").addEventListener("submit",async event=>{
+ event.preventDefault();$("loginError").textContent="";$("loginButton").disabled=true;$("loginButton").textContent="Checking…";
+ try{const result=await call("login",{password:$("password").value});token=result.token;sessionStorage.setItem(tokenKey,token);$("password").value="";await loadDashboard();}
+ catch(error){$("loginError").textContent=error.message;}
+ finally{$("loginButton").disabled=false;$("loginButton").textContent="Unlock owner dashboard";}
+});
+$("logout").addEventListener("click",lock);
+async function loadDashboard(){
+ $("globalError").textContent="";
+ try{
+  overview=await call("overview");
+  $("loginPanel").hidden=true;$("dashboard").hidden=false;
+  $("canvasCount").textContent=overview.canvases.length;$("groupCount").textContent=overview.groups.length;$("reportCount").textContent=overview.reports.length;
+  renderCanvases();renderGroups();renderReports();
+ }catch(error){$("globalError").textContent=error.message;}
+}
+function renderCanvases(){
+ const root=$("canvases");
+ root.innerHTML=overview.canvases.length?overview.canvases.map(item=>`<article class="item"><div class="item-main"><div class="item-title">${escapeHtml(item.name)}</div><div class="item-meta">Created ${escapeHtml(dateText(item.created_at))} · ${escapeHtml(item.id)}</div></div><div class="actions"><button class="btn" data-action="preview" data-kind="canvas" data-id="${escapeHtml(item.id)}" data-name="${escapeHtml(item.name)}">View</button><button class="btn" data-action="rename" data-id="${escapeHtml(item.id)}" data-name="${escapeHtml(item.name)}">Rename</button><button class="btn" data-action="clear-canvas" data-id="${escapeHtml(item.id)}">Clear</button><button class="btn danger" data-action="delete-canvas" data-id="${escapeHtml(item.id)}">Delete</button></div></article>`).join(""):'<div class="empty">No shared canvases found.</div>';
+}
+function renderGroups(){
+ const root=$("groups");
+ root.innerHTML=overview.groups.length?overview.groups.map(item=>`<article class="item"><div class="item-main"><div class="item-title">${escapeHtml(item.name)} <span class="muted">· private group</span></div><div class="item-meta">Created ${escapeHtml(dateText(item.created_at))} · ${escapeHtml(item.id)}</div></div><div class="actions"><button class="btn" data-action="preview" data-kind="group" data-id="${escapeHtml(item.id)}" data-name="${escapeHtml(item.name)}">View</button><button class="btn" data-action="clear-group" data-id="${escapeHtml(item.id)}">Clear</button><button class="btn danger" data-action="delete-group" data-id="${escapeHtml(item.id)}">Delete</button></div></article>`).join(""):'<div class="empty">No private group canvases found.</div>';
+}
+function renderReports(){
+ const root=$("reports");
+ root.innerHTML=overview.reports.length?overview.reports.map(item=>`<article class="item report"><div class="item-main"><div class="item-title">${escapeHtml(item.category)} <span class="muted">· #${escapeHtml(item.id)}</span></div><div class="item-meta">${escapeHtml(dateText(item.created_at))} · Canvas: ${escapeHtml(item.canvas_id)}</div><div class="report-details">${escapeHtml(item.details)}</div><div class="item-meta">${escapeHtml(item.page_url)}</div></div><div class="actions"><button class="btn danger" data-action="delete-report" data-id="${escapeHtml(item.id)}">Resolve / delete</button></div></article>`).join(""):'<div class="empty">No reports to review.</div>';
+}
+async function preview(kind,id,name){
+ $("viewerTitle").textContent=name;$("viewerCount").textContent="Loading saved strokes…";
+ const dialog=$("viewer");dialog.showModal();
+ try{
+  const result=await call("strokes",{kind,id});
+  $("viewerCount").textContent=result.strokes.length+" saved strokes";
+  drawPreview(result.strokes);
+ }catch(error){$("viewerCount").textContent=error.message;}
+}
+function drawPreview(rows){
+ const canvas=$("preview"),ctx=canvas.getContext("2d"),w=canvas.width,h=canvas.height;
+ ctx.clearRect(0,0,w,h);ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
+ const strokes=(rows||[]).map(row=>row.payload).filter(p=>p&&Array.isArray(p.points)&&p.points.length);
+ if(!strokes.length)return;
+ const coords=strokes.flatMap(s=>s.points.map(p=>({x:Number(p.x)*1000,y:Number(p.y)*1000}))).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));
+ if(!coords.length)return;
+ const minX=Math.min(...coords.map(p=>p.x)),maxX=Math.max(...coords.map(p=>p.x)),minY=Math.min(...coords.map(p=>p.y)),maxY=Math.max(...coords.map(p=>p.y));
+ const margin=48,spanX=Math.max(1,maxX-minX),spanY=Math.max(1,maxY-minY),scale=Math.min((w-margin*2)/spanX,(h-margin*2)/spanY,1);
+ const ox=(w-spanX*scale)/2-minX*scale,oy=(h-spanY*scale)/2-minY*scale;
+ for(const s of strokes){
+  const pts=s.points.map(p=>({x:Number(p.x)*1000*scale+ox,y:Number(p.y)*1000*scale+oy}));
+  if(!pts.length||pts.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))continue;
+  ctx.strokeStyle=/^#[0-9a-f]{6}$/i.test(s.color)?s.color:"#24251f";ctx.fillStyle=ctx.strokeStyle;
+  ctx.lineWidth=Math.max(.8,Math.min(80,(Number(s.size)||.002)*1000*scale));ctx.lineCap="round";ctx.lineJoin="round";
+  if(pts.length===1){ctx.beginPath();ctx.arc(pts[0].x,pts[0].y,ctx.lineWidth/2,0,Math.PI*2);ctx.fill();}
+  else{ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);ctx.stroke();}
+ }
+}
+$("closeViewer").addEventListener("click",()=>$("viewer").close());
+$("viewer").addEventListener("click",event=>{if(event.target===$("viewer"))$("viewer").close();});
+document.body.addEventListener("click",async event=>{
+ const button=event.target.closest("button[data-action]");if(!button)return;
+ const action=button.dataset.action,id=button.dataset.id;
+ try{
+  if(action==="preview"){await preview(button.dataset.kind,id,button.dataset.name);return;}
+  if(action==="rename"){const name=prompt("New canvas name:",button.dataset.name);if(!name||!name.trim())return;await call(action,{id,name});}
+  else{
+   const labels={"clear-canvas":"Clear all saved strokes from this shared canvas?","delete-canvas":"Permanently delete this canvas and all its strokes?","clear-group":"Clear all saved strokes from this private group?","delete-group":"Permanently delete this private group and its strokes?","delete-report":"Delete this report?"};
+   if(!confirm(labels[action]||"Continue?"))return;
+   await call(action,{id});
+  }
+  await loadDashboard();
+ }catch(error){$("globalError").textContent=error.message;}
+});
+if(token)loadDashboard();
+</script>
+</body>
+</html>
