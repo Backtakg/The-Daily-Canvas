@@ -418,6 +418,12 @@
             <button class="action-btn primary" id="saveBtn" title="Save drawing as PNG"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v3h14v-3"/></svg><span class="tool-label">Save</span></button>
           </div>
         </div>
+        <div class="advanced-color" aria-label="Advanced colour controls">
+          <label><input id="gradientEnabled" type="checkbox"> Gradient</label>
+          <label>Second colour <input id="gradientColor" type="color" value="#e47762" aria-label="Gradient second colour"></label>
+          <label>Style <select id="gradientStyle" aria-label="Gradient style"><option value="linear">Linear</option><option value="radial">Radial</option></select></label>
+          <label>Opacity <input id="strokeOpacity" type="range" min="5" max="100" value="100"><span id="opacityValue">100%</span></label>
+        </div>
         <div class="canvas-wrap">
           <div class="canvas-frame">
             <div class="canvas-world" id="canvasWorld">
@@ -1361,6 +1367,7 @@
         } else {
           ctx.beginPath();
           ctx.arc(lastPoint.x, lastPoint.y, Math.max(strokeSize / 2, 0.6), 0, Math.PI * 2);
+          ctx.globalAlpha = currentStroke.opacity ?? 1;
           ctx.fillStyle = strokeColor;
           ctx.fill();
           ctx.beginPath();
@@ -1432,6 +1439,7 @@
               });
             }
           }
+          if (currentStroke.gradient && currentStroke.points.length) { const first = currentStroke.points[0], last = currentStroke.points[currentStroke.points.length - 1]; const x1 = first.x * cssWidth, y1 = first.y * cssHeight, x2 = last.x * cssWidth, y2 = last.y * cssHeight; const grad = currentStroke.gradient.style === 'radial' ? ctx.createRadialGradient(x1,y1,0,x2,y2,Math.max(1,Math.hypot(x2-x1,y2-y1))) : ctx.createLinearGradient(x1,y1,x2,y2); grad.addColorStop(0,currentStroke.color); grad.addColorStop(1,currentStroke.gradient.color); ctx.strokeStyle = grad; }
           ctx.stroke();
           ctx.restore();
           return;
@@ -1440,7 +1448,7 @@
         ctx.lineJoin = 'round';
         ctx.strokeStyle = currentStroke.color;
         ctx.globalAlpha = currentStroke.opacity ?? 1;
-        if (currentStroke.gradient && currentStroke.points.length) { const first = currentStroke.points[0], last = currentStroke.points[currentStroke.points.length - 1]; const x1 = first.x * cssWidth, y1 = first.y * cssHeight, x2 = last.x * cssWidth, y2 = last.y * cssHeight; const grad = currentStroke.gradient.style === 'radial' ? ctx.createRadialGradient(x1,y1,0,x2,y2,Math.max(1,Math.hypot(x2-x1,y2-y1))) : ctx.createLinearGradient(x1,y1,x2,y2); grad.addColorStop(0,currentStroke.color); grad.addColorStop(1,currentStroke.gradient.color); ctx.strokeStyle = grad; }
+        if (currentStroke.gradient && currentStroke.points.length) { const first = currentStroke.points[0], x1 = first.x * cssWidth, y1 = first.y * cssHeight, x2 = p.x, y2 = p.y; const grad = currentStroke.gradient.style === 'radial' ? ctx.createRadialGradient(x1,y1,0,x2,y2,Math.max(1,Math.hypot(x2-x1,y2-y1))) : ctx.createLinearGradient(x1,y1,x2,y2); grad.addColorStop(0,currentStroke.color); grad.addColorStop(1,currentStroke.gradient.color); ctx.strokeStyle = grad; }
         ctx.lineWidth = currentStroke.size * cssWidth;
         ctx.lineTo(p.x, p.y);
         ctx.stroke();
