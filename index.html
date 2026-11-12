@@ -69,7 +69,7 @@
     .canvas-manager button { min-height:34px; padding:0 11px; border:1px solid var(--line); border-radius:8px; background:transparent; color:#66665e; font:inherit; font-size:11px; cursor:pointer; }
     .canvas-manager button:hover { background:#f2f0e9; }
     .canvas-manager .manager-spacer { flex:1; }
-    @media (max-width:420px) { .canvas-manager { gap:6px; padding:9px 8px; } .canvas-manager-label { display:none; } .canvas-manager select { flex:1; max-width:none; } .canvas-manager button { padding:0 8px; font-size:10px; } }
+    @media (max-width:420px) { .canvas-manager { flex-wrap:wrap; gap:6px; padding:9px 8px; } .canvas-manager-label { display:none; } .canvas-manager select { order:-1; flex:1 1 100%; width:100%; min-width:0; max-width:none; height:40px; padding:0 12px; font-size:12px; font-weight:650; } .canvas-manager .manager-spacer { display:none; } .canvas-manager button { flex:1 1 auto; padding:0 8px; font-size:10px; } }
     .studio.focus-mode { position:fixed; inset:12px; z-index:20; display:flex; flex-direction:column; border-radius:16px; }
     .studio.focus-mode .canvas-wrap { flex:1; min-height:0; display:flex; }
     .studio.focus-mode .canvas-frame { flex:1; min-height:0; }
