@@ -141,6 +141,16 @@
     .activity-message.visible { opacity:1; transform:translateY(0); }
     .activity-message::before { content:""; width:6px; height:6px; flex:0 0 6px; border-radius:50%; background:#7eaa91; box-shadow:0 0 0 3px rgba(126,170,145,.13); }
     @media (prefers-reduced-motion:reduce) { .activity-message { transition:none; } }
+    .replay-panel { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:11px 15px; border-top:1px solid var(--line); background:#fbfaf6; }
+    .replay-panel[hidden] { display:none; }
+    .replay-title { color:var(--ink); font-size:11px; font-weight:650; white-space:nowrap; }
+    .replay-control { min-height:32px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:#fffefa; color:#55564e; font:inherit; font-size:11px; cursor:pointer; }
+    .replay-control.primary { background:var(--accent); color:white; border-color:var(--accent); }
+    .replay-control:disabled { opacity:.45; cursor:not-allowed; }
+    .replay-progress { flex:1 1 120px; min-width:90px; height:5px; accent-color:#718879; }
+    .replay-status { color:var(--muted); font-size:10px; min-width:76px; }
+    .replay-speed { height:32px; padding:0 7px; border:1px solid var(--line); border-radius:8px; background:#fffefa; color:#55564e; font:inherit; font-size:11px; }
+    @media (max-width:700px) { .replay-panel { gap:7px; padding:9px 10px; } .replay-progress { order:2; flex-basis:100%; } .replay-status { flex:1; text-align:right; } }
     .bottomline { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:12px 17px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }
     .bottom-actions { display:flex; align-items:center; justify-content:flex-end; gap:16px; margin-left:auto; white-space:nowrap; }
     .bottom-actions .report-link { color:var(--muted); font-size:11px; }
@@ -335,6 +345,7 @@
           <span class="canvas-manager-label">Canvas</span>
           <select id="canvasSelect" aria-label="Choose a canvas"><option value="">Loading canvases…</option></select>
           <span class="manager-spacer"></span>
+          <button id="replayBtn" type="button" title="Replay this canvas drawing">▶ Replay</button>
           <button id="renameCanvasBtn" type="button" title="Rename this canvas">Rename</button>
           <button id="newGroupCanvasBtn" type="button" title="Create a private group canvas and invite friends">+ Group</button>
           <button id="inviteGroupBtn" type="button" title="Copy a private invitation link" hidden>Invite</button>
@@ -404,6 +415,15 @@
               <div class="canvas-hint">YOUR CANVAS · YOUR PACE</div>
             </div>
           </div>
+        </div>
+        <div class="replay-panel" id="replayPanel" hidden aria-label="Drawing replay controls">
+          <span class="replay-title">Drawing replay</span>
+          <button class="replay-control primary" id="replayPlayBtn" type="button">Pause</button>
+          <button class="replay-control" id="replayRestartBtn" type="button">Restart</button>
+          <label class="replay-status" for="replayProgress" id="replayStatus" aria-live="polite">Preparing…</label>
+          <input class="replay-progress" id="replayProgress" type="range" min="0" max="0" value="0" aria-label="Replay progress" disabled>
+          <select class="replay-speed" id="replaySpeed" aria-label="Replay speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+          <button class="replay-control" id="replayCloseBtn" type="button">Close</button>
         </div>
         <div class="bottomline">
           <span class="save-state"><span class="save-dot" aria-hidden="true"></span><span id="saveStatus">Connecting to the shared canvas…</span></span>
@@ -546,6 +566,10 @@
       let panMode = false, isPanning = false, panPointer = null;
       let panStart = null;
       let drawing = false;
+      let replaying = false;
+      let replayTimer = null;
+      let replayRows = [];
+      let replayIndex = 0;
       let lastPoint = null;
       let currentStroke = null;
       let linePreview = null;
@@ -663,6 +687,7 @@
         redoBtn.disabled = drawing || redoStack.length === 0;
       }
       function renderCanvasLedger() {
+        if (replaying) return;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -675,6 +700,106 @@
           if (!hiddenStrokeIds.has(String(row.id))) paintSharedStroke(row.payload);
         });
       }
+
+      const replayPanel = document.getElementById('replayPanel');
+      const replayPlayBtn = document.getElementById('replayPlayBtn');
+      const replayProgress = document.getElementById('replayProgress');
+      const replayStatus = document.getElementById('replayStatus');
+      const replaySpeed = document.getElementById('replaySpeed');
+      function paintReplayBackground() {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      }
+      function finishReplay(restore = true) {
+        if (replayTimer) clearTimeout(replayTimer);
+        replayTimer = null;
+        replaying = false;
+        replayPlayBtn.textContent = 'Play';
+        if (restore) renderCanvasLedger();
+      }
+      function replayNextStroke() {
+        if (!replaying) return;
+        if (replayIndex >= replayRows.length) {
+          replayStatus.textContent = 'Replay complete';
+          replayPlayBtn.textContent = 'Play again';
+          replayTimer = null;
+          return;
+        }
+        const row = replayRows[replayIndex];
+        if (row && row.payload) paintSharedStroke(row.payload);
+        replayIndex += 1;
+        replayProgress.value = String(replayIndex);
+        replayStatus.textContent = replayIndex + ' / ' + replayRows.length + ' strokes';
+        const speed = Math.max(0.5, Number(replaySpeed.value) || 1);
+        replayTimer = setTimeout(replayNextStroke, 135 / speed);
+      }
+      function beginReplay() {
+        if (drawing) { showToast('Finish your current stroke before replaying.'); return; }
+        replayRows = [...canvasStrokes]
+          .filter(row => row && row.payload && !hiddenStrokeIds.has(String(row.id)))
+          .sort((a, b) => {
+            const left = Number(a.id), right = Number(b.id);
+            return (Number.isFinite(left) ? left : Number.MAX_SAFE_INTEGER) -
+              (Number.isFinite(right) ? right : Number.MAX_SAFE_INTEGER);
+          });
+        if (!replayRows.length) { showToast('There are no saved strokes to replay yet.'); return; }
+        finishReplay(false);
+        replaying = true;
+        replayIndex = 0;
+        replayPanel.hidden = false;
+        replayProgress.max = String(replayRows.length);
+        replayProgress.value = '0';
+        replayStatus.textContent = '0 / ' + replayRows.length + ' strokes';
+        replayPlayBtn.textContent = 'Pause';
+        paintReplayBackground();
+        replayTimer = setTimeout(replayNextStroke, 180);
+      }
+      function pauseOrResumeReplay() {
+        if (!replaying) {
+          if (replayRows.length && replayIndex >= replayRows.length) {
+            beginReplay();
+            return;
+          }
+          if (!replayRows.length) { beginReplay(); return; }
+          replaying = true;
+          replayPlayBtn.textContent = 'Pause';
+          replayNextStroke();
+          return;
+        }
+        if (replayTimer) clearTimeout(replayTimer);
+        replayTimer = null;
+        replaying = false;
+        replayPlayBtn.textContent = 'Play';
+        replayStatus.textContent = 'Paused · ' + replayIndex + ' / ' + replayRows.length + ' strokes';
+      }
+      document.getElementById('replayBtn').addEventListener('click', () => {
+        if (replayPanel.hidden) beginReplay();
+        else if (!replaying && replayIndex < replayRows.length) pauseOrResumeReplay();
+        else beginReplay();
+      });
+      replayPlayBtn.addEventListener('click', pauseOrResumeReplay);
+      document.getElementById('replayRestartBtn').addEventListener('click', beginReplay);
+      document.getElementById('replayCloseBtn').addEventListener('click', () => {
+        finishReplay(true);
+        replayRows = [];
+        replayPanel.hidden = true;
+      });
+      replayProgress.addEventListener('input', () => {
+        if (!replayRows.length) return;
+        if (replayTimer) clearTimeout(replayTimer);
+        replayTimer = null;
+        replaying = false;
+        replayIndex = Math.max(0, Math.min(replayRows.length, Number(replayProgress.value)));
+        paintReplayBackground();
+        for (let i = 0; i < replayIndex; i++) {
+          if (replayRows[i]?.payload) paintSharedStroke(replayRows[i].payload);
+        }
+        replayStatus.textContent = replayIndex + ' / ' + replayRows.length + ' strokes';
+        replayPlayBtn.textContent = replayIndex >= replayRows.length ? 'Play again' : 'Play';
+      });
+
       function persistHiddenStrokes() {
         try {
           sessionStorage.setItem('daily-canvas-hidden-strokes', JSON.stringify([...hiddenStrokeIds]));
@@ -1185,6 +1310,7 @@
       }
       function startDraw(event) {
         if (event.button !== undefined && event.button !== 0) return;
+        if (replaying) { event.preventDefault(); return; }
         if (panMode) {
           event.preventDefault();
           isPanning = true;
