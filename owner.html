@@ -28,10 +28,11 @@
 </section>
 <section id="dashboard" hidden>
 <div class="topline"><div><div class="eyebrow">Private control room</div><h1>Owner dashboard</h1><div class="sub">Manage shared canvases, private group rooms and community reports.</div></div><button id="logout" class="btn">Lock dashboard</button></div>
-<div class="stats"><div class="stat"><strong id="canvasCount">0</strong><span>Shared canvases</span></div><div class="stat"><strong id="groupCount">0</strong><span>Private group rooms</span></div><div class="stat"><strong id="reportCount">0</strong><span>Open reports</span></div></div>
+<div class="stats"><div class="stat"><strong id="canvasCount">0</strong><span>Shared canvases</span></div><div class="stat"><strong id="groupCount">0</strong><span>Private group rooms</span></div><div class="stat"><strong id="reportCount">0</strong><span>Open reports</span></div><div class="stat"><strong id="feedbackCount">0</strong><span>Feedback messages</span></div></div>
 <section class="section"><h2>Shared canvases</h2><div id="canvases" class="list"></div></section>
 <section class="section"><h2>Private group canvases</h2><p class="sub">These rooms are hidden from the public canvas list. Only you can inspect them here; friends still need their private invite link.</p><div id="groups" class="list"></div></section>
 <section class="section"><h2>Community reports</h2><div id="reports" class="list"></div></section>
+<section class="section"><h2>Visitor feedback</h2><p class="sub">Suggestions, feature requests, bug reports and general feedback sent by visitors. Only you can read these messages.</p><div id="feedback" class="list"></div></section>
 <p class="note">Owner actions are verified on the server. Deleting a canvas or group permanently removes its saved strokes. Private canvases saved only in a visitor's browser are not stored on the server and cannot be viewed here.</p>
 </section>
 <div id="globalError" class="error" role="alert"></div>
@@ -69,8 +70,8 @@ async function loadDashboard(){
  try{
   overview=await call("overview");
   $("loginPanel").hidden=true;$("dashboard").hidden=false;
-  $("canvasCount").textContent=overview.canvases.length;$("groupCount").textContent=overview.groups.length;$("reportCount").textContent=overview.reports.length;
-  renderCanvases();renderGroups();renderReports();
+  $("canvasCount").textContent=overview.canvases.length;$("groupCount").textContent=overview.groups.length;$("reportCount").textContent=overview.reports.length;$("feedbackCount").textContent=overview.feedback.length;
+  renderCanvases();renderGroups();renderReports();renderFeedback();
  }catch(error){$("globalError").textContent=error.message;}
 }
 function renderCanvases(){
@@ -84,6 +85,10 @@ function renderGroups(){
 function renderReports(){
  const root=$("reports");
  root.innerHTML=overview.reports.length?overview.reports.map(item=>`<article class="item report"><div class="item-main"><div class="item-title">${escapeHtml(item.category)} <span class="muted">· #${escapeHtml(item.id)}</span></div><div class="item-meta">${escapeHtml(dateText(item.created_at))} · Canvas: ${escapeHtml(item.canvas_id)}</div><div class="report-details">${escapeHtml(item.details)}</div><div class="item-meta">${escapeHtml(item.page_url)}</div></div><div class="actions"><button class="btn danger" data-action="delete-report" data-id="${escapeHtml(item.id)}">Resolve / delete</button></div></article>`).join(""):'<div class="empty">No reports to review.</div>';
+}
+function renderFeedback(){
+ const root=$("feedback");
+ root.innerHTML=overview.feedback.length?overview.feedback.map(item=>`<article class="item report"><div class="item-main"><div class="item-title">${escapeHtml(item.category)} <span class="muted">· #${escapeHtml(item.id)}</span></div><div class="item-meta">${escapeHtml(dateText(item.created_at))} · Canvas: ${escapeHtml(item.canvas_id)}</div><div class="report-details">${escapeHtml(item.details)}</div><div class="item-meta">${escapeHtml(item.page_url)}</div></div><div class="actions"><button class="btn danger" data-action="delete-feedback" data-id="${escapeHtml(item.id)}">Delete</button></div></article>`).join(""):'<div class="empty">No feedback yet. New visitor messages will appear here.</div>';
 }
 async function preview(kind,id,name){
  $("viewerTitle").textContent=name;$("viewerCount").textContent="Loading saved strokes…";
@@ -122,7 +127,7 @@ document.body.addEventListener("click",async event=>{
   if(action==="preview"){await preview(button.dataset.kind,id,button.dataset.name);return;}
   if(action==="rename"){const name=prompt("New canvas name:",button.dataset.name);if(!name||!name.trim())return;await call(action,{id,name});}
   else{
-   const labels={"clear-canvas":"Clear all saved strokes from this shared canvas?","delete-canvas":"Permanently delete this canvas and all its strokes?","clear-group":"Clear all saved strokes from this private group?","delete-group":"Permanently delete this private group and its strokes?","delete-report":"Delete this report?"};
+   const labels={"clear-canvas":"Clear all saved strokes from this shared canvas?","delete-canvas":"Permanently delete this canvas and all its strokes?","clear-group":"Clear all saved strokes from this private group?","delete-group":"Permanently delete this private group and its strokes?","delete-report":"Delete this report?","delete-feedback":"Delete this feedback message?"};
    if(!confirm(labels[action]||"Continue?"))return;
    await call(action,{id});
   }
