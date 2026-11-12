@@ -407,7 +407,7 @@
           <span class="activity-message" id="activityMessage" role="status" aria-live="polite"></span>
         </div>
       </section>
-      <footer><span>One world. Many shared canvases.</span><span>Take your time. · <button class="report-link" id="reportBtn" type="button">Report a problem</button></span></footer>
+      <footer><span>One world. Many shared canvases.</span><span>Take your time. · <button class="report-link" id="feedbackBtn" type="button">Share feedback</button> · <button class="report-link" id="reportBtn" type="button">Report a problem</button></span></footer>
     </main>
   </div>
   <div class="focus-backdrop" aria-hidden="true"></div>
@@ -454,6 +454,24 @@
       </label>
       <p class="report-note">Your report is sent privately to the site owner. Please don't include passwords or other sensitive information.</p>
       <button class="report-submit" id="submitReport" type="submit">Send report</button>
+    </form>
+  </dialog>
+  <dialog class="shortcuts-dialog" id="feedbackDialog" aria-labelledby="feedbackTitle">
+    <div class="shortcuts-head"><h2 id="feedbackTitle">Share your feedback</h2><button class="shortcuts-close" id="closeFeedback" type="button" aria-label="Close feedback form">×</button></div>
+    <form class="report-form" id="feedbackForm">
+      <label for="feedbackCategory">What would you like to share?
+        <select id="feedbackCategory" name="category" required>
+          <option value="Suggestion">Suggestion</option>
+          <option value="Feature request">Feature request</option>
+          <option value="Bug report">Bug report</option>
+          <option value="General feedback">General feedback</option>
+        </select>
+      </label>
+      <label for="feedbackDetails">Your feedback
+        <textarea id="feedbackDetails" name="details" minlength="10" maxlength="2000" placeholder="Tell us what you think or what would make The Daily Canvas better…" required></textarea>
+      </label>
+      <p class="report-note">Your feedback is private and can only be read by the site owner. Please don't include passwords or sensitive information.</p>
+      <button class="report-submit" id="submitFeedback" type="submit">Send feedback</button>
     </form>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -1591,6 +1609,45 @@
         } finally {
           reportSubmit.disabled = false;
           reportSubmit.textContent = 'Send report';
+        }
+      });
+
+      const feedbackDialog = document.getElementById('feedbackDialog');
+      const feedbackForm = document.getElementById('feedbackForm');
+      const feedbackSubmit = document.getElementById('submitFeedback');
+      document.getElementById('feedbackBtn').addEventListener('click', () => feedbackDialog.showModal());
+      document.getElementById('closeFeedback').addEventListener('click', () => feedbackDialog.close());
+      feedbackDialog.addEventListener('click', event => { if (event.target === feedbackDialog) feedbackDialog.close(); });
+      feedbackForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const category = document.getElementById('feedbackCategory').value;
+        const details = document.getElementById('feedbackDetails').value.trim();
+        if (details.length < 10) { showToast('Please add at least 10 characters.'); return; }
+        const cooldownKey = 'daily-canvas-feedback-last-sent';
+        const lastSent = Number(localStorage.getItem(cooldownKey) || 0);
+        if (Date.now() - lastSent < 30000) { showToast('Please wait before sending more feedback.'); return; }
+        feedbackSubmit.disabled = true;
+        feedbackSubmit.textContent = 'Sending…';
+        try {
+          const feedbackUrl = new URL(location.href);
+          feedbackUrl.searchParams.delete('key');
+          const { error } = await supabase.from('canvas_feedback').insert({
+            category,
+            details,
+            canvas_id: String(activeCanvasId || 'unknown').slice(0, 100),
+            page_url: feedbackUrl.toString().slice(0, 500)
+          });
+          if (error) throw error;
+          localStorage.setItem(cooldownKey, String(Date.now()));
+          feedbackForm.reset();
+          feedbackDialog.close();
+          showToast('Thank you — your feedback has been sent!');
+        } catch (error) {
+          console.error('Could not submit feedback:', error);
+          showToast('Could not send feedback. Please try again.');
+        } finally {
+          feedbackSubmit.disabled = false;
+          feedbackSubmit.textContent = 'Send feedback';
         }
       });
 
