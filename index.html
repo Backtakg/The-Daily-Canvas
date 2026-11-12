@@ -142,6 +142,9 @@
     .activity-message::before { content:""; width:6px; height:6px; flex:0 0 6px; border-radius:50%; background:#7eaa91; box-shadow:0 0 0 3px rgba(126,170,145,.13); }
     @media (prefers-reduced-motion:reduce) { .activity-message { transition:none; } }
     .bottomline { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:12px 17px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }
+    .bottom-actions { display:flex; align-items:center; justify-content:flex-end; gap:16px; margin-left:auto; white-space:nowrap; }
+    .bottom-actions .report-link { color:var(--muted); font-size:11px; }
+    .bottom-actions .report-link:hover { color:var(--ink); }
     .save-state { display:flex; align-items:center; gap:7px; }
     .save-dot { width:6px; height:6px; border-radius:50%; background:#9ab49c; }
     footer { display:flex; justify-content:space-between; gap:12px; color:#a09f96; font-size:11px; padding:18px 2px 0; }
@@ -405,9 +408,10 @@
         <div class="bottomline">
           <span class="save-state"><span class="save-dot" aria-hidden="true"></span><span id="saveStatus">Connecting to the shared canvas…</span></span>
           <span class="activity-message" id="activityMessage" role="status" aria-live="polite"></span>
+          <span class="bottom-actions"><button class="report-link" id="feedbackBtn" type="button">Share feedback</button><button class="report-link" id="reportBtn" type="button">Report a problem</button></span>
         </div>
       </section>
-      <footer><span>One world. Many shared canvases.</span><span>Take your time. · <button class="report-link" id="feedbackBtn" type="button">Share feedback</button> · <button class="report-link" id="reportBtn" type="button">Report a problem</button></span></footer>
+      <footer><span>One world. Many shared canvases.</span><span>Take your time.</span></footer>
     </main>
   </div>
   <div class="focus-backdrop" aria-hidden="true"></div>
