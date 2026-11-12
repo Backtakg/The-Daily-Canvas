@@ -33,6 +33,18 @@
     .brand-name { font-size:15px; font-weight:650; letter-spacing:-.04em; }
     .header-note { color:var(--muted); font-size:12px; letter-spacing:.02em; }
     .header-live { display:flex; align-items:center; gap:8px; color:#6f766c; font-size:11px; white-space:nowrap; }
+    .header-right { display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
+    .name-tools { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:10px; }
+    .name-tools button { border:0; padding:0; background:none; color:#66665e; text-decoration:underline; text-underline-offset:2px; cursor:pointer; font:inherit; }
+    .online-names { max-width:min(58vw,420px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#99988f; font-size:10px; }
+    .name-dialog { width:min(360px,calc(100% - 32px)); border:1px solid var(--line); border-radius:16px; padding:22px; color:var(--ink); background:var(--panel); box-shadow:0 24px 80px rgba(0,0,0,.2); }
+    .name-dialog::backdrop { background:rgba(30,31,27,.48); backdrop-filter:blur(3px); }
+    .name-dialog h2 { margin:0 0 7px; font-size:19px; letter-spacing:-.04em; }
+    .name-dialog p { margin:0 0 16px; color:var(--muted); font-size:12px; line-height:1.5; }
+    .name-dialog input { width:100%; height:42px; border:1px solid var(--line); border-radius:9px; padding:0 11px; background:#fffefa; color:var(--ink); font:inherit; font-size:14px; }
+    .name-dialog form { display:grid; gap:11px; }
+    .name-dialog button[type=submit] { min-height:40px; border:0; border-radius:9px; background:var(--accent); color:white; font:inherit; font-size:12px; cursor:pointer; }
+    .name-dialog .name-skip { border:0; background:none; color:var(--muted); font:inherit; font-size:11px; cursor:pointer; }
     .live-dot { width:7px; height:7px; border-radius:50%; background:#aeb3a8; box-shadow:0 0 0 3px rgba(174,179,168,.14); }
     .live-dot.connected { background:#83a98a; box-shadow:0 0 0 3px rgba(131,169,138,.16); }
     .live-dot.offline { background:#c88b7e; box-shadow:0 0 0 3px rgba(200,139,126,.14); }
@@ -161,6 +173,7 @@
       .brand-name { font-size:14px; }
       .header-note { display:none; }
       .header-live { font-size:10px; }
+      .online-names { max-width:55vw; font-size:9px; }
       main { padding:15px 0 34px; }
       .intro { align-items:flex-start; gap:8px; margin-bottom:16px; }
       h1 { font-size:clamp(29px, 8vw, 38px); }
@@ -289,7 +302,11 @@
         <span class="brand-mark" aria-hidden="true"></span>
         <span class="brand-name">the daily canvas</span>
       </a>
-      <div class="header-live" id="onlineStatus" aria-live="polite"><span class="live-dot" id="liveDot"></span><span><strong id="onlineCount">—</strong> here now</span></div>
+      <div class="header-right">
+        <div class="header-live" id="onlineStatus" aria-live="polite"><span class="live-dot" id="liveDot"></span><span><strong id="onlineCount">—</strong> here now</span></div>
+        <div class="name-tools"><span>you: <strong id="myDisplayName">Guest</strong></span><button id="editNameBtn" type="button">change</button></div>
+        <div class="online-names" id="onlineNames" aria-live="polite">People here will appear by name</div>
+      </div>
     </header>
 
     <main>
@@ -394,6 +411,15 @@
     </main>
   </div>
   <div class="focus-backdrop" aria-hidden="true"></div>
+  <dialog class="name-dialog" id="nameDialog" aria-labelledby="nameDialogTitle">
+    <h2 id="nameDialogTitle">What should we call you?</h2>
+    <p>Choose a nickname so people can recognise you on the canvas. It will be saved on this device. No account or real name needed.</p>
+    <form id="nameForm">
+      <input id="displayNameInput" type="text" maxlength="24" minlength="2" autocomplete="nickname" placeholder="Your nickname" aria-label="Your display name" required>
+      <button type="submit">Save name</button>
+      <button class="name-skip" id="skipNameBtn" type="button">Continue as Guest</button>
+    </form>
+  </dialog>
   <dialog class="shortcuts-dialog" id="shortcutsDialog" aria-labelledby="shortcutsTitle">
     <div class="shortcuts-head"><h2 id="shortcutsTitle">A few handy keys</h2><button class="shortcuts-close" id="closeShortcuts" type="button" aria-label="Close shortcuts">×</button></div>
     <div class="shortcut-list">
@@ -513,6 +539,24 @@
       let toastTimer = null;
       let cssWidth = 0, cssHeight = 0, pixelRatio = 1;
       const makeClientId = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, char => { const r = Math.random() * 16 | 0; return (char === 'x' ? r : (r & 3 | 8)).toString(16); });
+      const displayNameKey = 'daily-canvas-display-name';
+      const cleanDisplayName = value => String(value || '').replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 24);
+      let displayName = cleanDisplayName(localStorage.getItem(displayNameKey)) || 'Guest';
+      const displayNameEl = document.getElementById('myDisplayName');
+      if (displayNameEl) displayNameEl.textContent = displayName;
+      const updateOnlineNames = presence => {
+        const state = presence.presenceState() || {};
+        const names = [...new Set(Object.values(state).flat().map(entry => cleanDisplayName(entry.display_name)).filter(Boolean))];
+        const roster = document.getElementById('onlineNames');
+        if (roster) roster.textContent = names.length ? names.join(' · ') : 'You are the first one here';
+      };
+      const trackDisplayName = () => {
+        if (!presenceChannel) return;
+        const metadata = groupRoomState
+          ? { active: true, room_id: groupRoomState.id, display_name: displayName, joined_at: new Date().toISOString() }
+          : { active: true, canvas_id: activeCanvasId, display_name: displayName, joined_at: new Date().toISOString() };
+        presenceChannel.track(metadata).catch(error => console.warn('Could not update display name presence:', error));
+      };
       const sessionId = (() => {
         let id = sessionStorage.getItem('daily-canvas-session');
         if (!id) { id = makeClientId(); sessionStorage.setItem('daily-canvas-session', id); }
@@ -529,7 +573,7 @@
         const event = cursorSendPending; cursorSendPending = null;
         lastCursorSentAt = performance.now();
         const rect = canvas.getBoundingClientRect();
-        presenceChannel.send({ type: 'broadcast', event: 'cursor', payload: { id: cursorId, x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)), hidden: false, drawing: drawing } }).catch(() => {});
+        presenceChannel.send({ type: 'broadcast', event: 'cursor', payload: { id: cursorId, name: displayName, x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)), hidden: false, drawing: drawing } }).catch(() => {});
       }, 70);
       let lastEventId = 0;
       const pendingEvents = [];
@@ -738,6 +782,7 @@
           const state = presence.presenceState() || {};
           const count = Math.max(includeSelf ? 1 : 0, Object.values(state).reduce((total, entries) => total + (Array.isArray(entries) ? entries.length : 0), 0));
           document.getElementById('onlineCount').textContent = String(count);
+          updateOnlineNames(presence);
           document.getElementById('liveDot')?.classList.add('connected');
           document.getElementById('liveDot')?.classList.remove('offline');
         }
@@ -752,7 +797,7 @@
         });
         presence.subscribe(status => {
           if (switchToken !== channelSwitchToken) return;
-          if (status === 'SUBSCRIBED') presence.track({ active: true, room_id: roomId, joined_at: new Date().toISOString() }).then(result => { if (result === 'ok') updateGroupCount(true); });
+          if (status === 'SUBSCRIBED') presence.track({ active: true, room_id: roomId, display_name: displayName, joined_at: new Date().toISOString() }).then(result => { if (result === 'ok') updateGroupCount(true); });
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             document.getElementById('onlineCount').textContent = '—';
             document.getElementById('liveDot')?.classList.add('offline');
@@ -821,6 +866,7 @@
             total + (Array.isArray(entries) ? entries.length : 0), 0);
           const count = Math.max(includeSelf ? 1 : 0, remoteCount);
           if (onlineCountEl) onlineCountEl.textContent = String(count);
+          updateOnlineNames(presence);
           liveDot?.classList.add('connected');
           liveDot?.classList.remove('offline');
           onlineStatus?.setAttribute('aria-label', count + (count === 1 ? ' person connected to this canvas worldwide' : ' people connected to this canvas worldwide'));
@@ -864,7 +910,7 @@
         presence.subscribe((status, subscribeError) => {
           if (switchToken !== channelSwitchToken) return;
           if (status === 'SUBSCRIBED') {
-            presence.track({ active: true, canvas_id: canvasId, joined_at: new Date().toISOString() })
+            presence.track({ active: true, canvas_id: canvasId, display_name: displayName, joined_at: new Date().toISOString() })
               .then(trackStatus => {
                 if (switchToken !== channelSwitchToken) return;
                 if (trackStatus !== 'ok') throw new Error('Presence tracking returned: ' + trackStatus);
@@ -936,10 +982,12 @@
           const hue = Math.abs(hashCursorId(data.id)) % 360;
           cursor.style.setProperty('--cursor-color', 'hsl(' + hue + ' 38% 48%)');
           const mark = document.createElement('div'); mark.className = 'remote-cursor-mark';
-          const label = document.createElement('div'); label.className = 'remote-cursor-label'; label.textContent = 'someone';
+          const label = document.createElement('div'); label.className = 'remote-cursor-label'; label.textContent = cleanDisplayName(data.name) || 'Guest';
           cursor.append(mark, label); layer.appendChild(cursor);
           remoteCursorElements.set(data.id, cursor);
         }
+        const nameLabel = cursor.querySelector('.remote-cursor-label');
+        if (nameLabel) nameLabel.textContent = cleanDisplayName(data.name) || 'Guest';
         cursor.style.left = (data.x * layer.clientWidth) + 'px';
         cursor.style.top = (data.y * layer.clientHeight) + 'px';
         cursor.classList.toggle('is-drawing', data.drawing === true);
@@ -967,7 +1015,7 @@
           const rect = canvas.getBoundingClientRect();
           const x = hidden ? 0 : Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
           const y = hidden ? 0 : Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-          presenceChannel.send({ type: 'broadcast', event: 'cursor', payload: { id: cursorId, x, y, hidden, drawing: drawing && !hidden } }).catch(() => {});
+          presenceChannel.send({ type: 'broadcast', event: 'cursor', payload: { id: cursorId, name: displayName, x, y, hidden, drawing: drawing && !hidden } }).catch(() => {});
         };
         if (hidden || force || now - lastCursorSentAt >= 65) { lastCursorSentAt = now; send(); }
         else { cursorSendPending = event; }
@@ -1480,6 +1528,32 @@
       document.getElementById('newGroupCanvasBtn').addEventListener('click', createPrivateGroupCanvas);
       document.getElementById('inviteGroupBtn').addEventListener('click', inviteToGroup);
       document.getElementById('renameCanvasBtn').addEventListener('click', renameCanvas);
+
+      const nameDialog = document.getElementById('nameDialog');
+      const nameInput = document.getElementById('displayNameInput');
+      const nameForm = document.getElementById('nameForm');
+      const openNameDialog = () => { nameInput.value = displayName === 'Guest' ? '' : displayName; nameDialog.showModal(); nameInput.focus(); };
+      document.getElementById('editNameBtn').addEventListener('click', openNameDialog);
+      nameForm.addEventListener('submit', event => {
+        event.preventDefault();
+        const nextName = cleanDisplayName(nameInput.value);
+        if (nextName.length < 2) { showToast('Please enter at least 2 characters.'); return; }
+        displayName = nextName;
+        localStorage.setItem(displayNameKey, displayName);
+        displayNameEl.textContent = displayName;
+        nameDialog.close();
+        trackDisplayName();
+        showToast('Your name is now ' + displayName + '.');
+      });
+      document.getElementById('skipNameBtn').addEventListener('click', () => {
+        displayName = 'Guest';
+        localStorage.setItem(displayNameKey, displayName);
+        displayNameEl.textContent = displayName;
+        nameDialog.close();
+        trackDisplayName();
+      });
+      nameDialog.addEventListener('click', event => { if (event.target === nameDialog && displayName === 'Guest') event.preventDefault(); });
+      if (!localStorage.getItem(displayNameKey)) nameDialog.showModal();
 
       const reportDialog = document.getElementById('reportDialog');
       const reportForm = document.getElementById('reportForm');
