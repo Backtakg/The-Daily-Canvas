@@ -97,6 +97,16 @@
     .custom-color::-webkit-color-swatch { border:1px solid #d9d6cd; border-radius:50%; }
     .shape-fill-control { display:flex; align-items:center; gap:5px; color:var(--muted); font-size:10px; white-space:nowrap; }
     .shape-fill-control .custom-color { width:23px; height:23px; }
+    .advanced-color { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:9px 14px; border-bottom:1px solid var(--line); background:#fbfaf6; }
+    .advanced-color label { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:10px; white-space:nowrap; }
+    .advanced-color input[type=color] { width:25px; height:25px; padding:0; border:0; background:none; cursor:pointer; }
+    .advanced-color input[type=range] { width:76px; }
+    .advanced-color select { height:29px; border:1px solid var(--line); border-radius:7px; background:white; color:var(--ink); font:inherit; font-size:10px; }
+    .view-only-note { display:none; padding:10px 15px; border-bottom:1px solid var(--line); color:#687968; background:#f1f5ef; font-size:11px; }
+    body.read-only-view .view-only-note { display:block; }
+    body.read-only-view .toolbar, body.read-only-view .advanced-color, body.read-only-view #canvasSelect, body.read-only-view .canvas-manager-label, body.read-only-view #replayBtn, body.read-only-view #renameCanvasBtn, body.read-only-view #newGroupCanvasBtn, body.read-only-view #inviteGroupBtn, body.read-only-view #newCanvasBtn, body.read-only-view .bottom-actions { display:none !important; }
+    body.read-only-view .canvas-manager { min-height:42px; }
+    body.read-only-view .canvas-manager::after { content:"Read-only shared view"; color:var(--muted); font-size:11px; }
     .studio-color { width:23px; height:23px; }
     .studio-color::-webkit-color-swatch { border-radius:6px; }
     .studio-color::-moz-color-swatch { border-radius:6px; }
@@ -345,12 +355,14 @@
           <span class="canvas-manager-label">Canvas</span>
           <select id="canvasSelect" aria-label="Choose a canvas"><option value="">Loading canvases…</option></select>
           <span class="manager-spacer"></span>
+          <button id="shareViewBtn" type="button" title="Copy a read-only canvas link">Share view</button>
           <button id="replayBtn" type="button" title="Replay this canvas drawing">▶ Replay</button>
           <button id="renameCanvasBtn" type="button" title="Rename this canvas">Rename</button>
           <button id="newGroupCanvasBtn" type="button" title="Create a private group canvas and invite friends">+ Group</button>
           <button id="inviteGroupBtn" type="button" title="Copy a private invitation link" hidden>Invite</button>
           <button id="newCanvasBtn" type="button" title="Create another shared canvas">+ Shared</button>
         </div>
+        <div class="view-only-note">You are viewing this canvas. Drawing and editing are disabled.</div>
         <div class="toolbar" role="toolbar" aria-label="Drawing tools">
           <div class="tool-group">
             <button class="tool-btn active" id="brushTool" aria-label="Brush" title="Brush (B)">
@@ -527,6 +539,8 @@
       const initialGroupId = initialParams.get('group');
       let activeCanvasId = initialGroupId ? 'group:' + initialGroupId : (initialParams.get('canvas') || localStorage.getItem('daily-canvas-active') || DEFAULT_CANVAS_ID);
       let groupSecret = initialParams.get('key') || '';
+      const readOnlyView = initialParams.get('view') === '1' && !!initialParams.get('canvas') && !initialGroupId;
+      if (readOnlyView) document.body.classList.add('read-only-view');
       let groupRoomState = null;
       let groupPollTimer = null;
       const GROUP_PREFIX = 'group:';
@@ -557,6 +571,10 @@
       const studio = document.querySelector('.studio');
       const saveStatus = document.getElementById('saveStatus');
       let color = '#292b25';
+      let gradientEnabled = false;
+      let gradientColor = '#e47762';
+      let gradientStyle = 'linear';
+      let strokeOpacity = 1;
       let shapeFillColor = '#e47762';
       let size = 5;
       let tool = 'brush';
@@ -873,6 +891,8 @@
         ctx.save();
         ctx.strokeStyle = stroke.color;
         ctx.fillStyle = stroke.color;
+        ctx.globalAlpha = Number.isFinite(Number(stroke.opacity)) ? Math.max(0.05, Math.min(1, Number(stroke.opacity))) : 1;
+        if (stroke.gradient && pts.length) { const a = toScreen(pts[0]), b = toScreen(pts[pts.length - 1]); const grad = stroke.gradient.style === 'radial' ? ctx.createRadialGradient(a.x,a.y,0,b.x,b.y,Math.max(1,Math.hypot(b.x-a.x,b.y-a.y))) : ctx.createLinearGradient(a.x,a.y,b.x,b.y); grad.addColorStop(0,stroke.color); grad.addColorStop(1,stroke.gradient.color); ctx.strokeStyle = grad; ctx.fillStyle = grad; }
         ctx.lineWidth = width;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -1310,6 +1330,7 @@
         endDraw();
       }
       function startDraw(event) {
+        if (readOnlyView) { event.preventDefault(); return; }
         if (event.button !== undefined && event.button !== 0) return;
         if (replaying) { event.preventDefault(); return; }
         if (panMode) {
@@ -1331,7 +1352,7 @@
         const isFilledShape = fillShapes && (tool === 'rectangle' || tool === 'ellipse');
         const strokeColor = tool === 'eraser' ? '#ffffff' : (isFilledShape ? shapeFillColor : color);
         const strokeSize = tool === 'eraser' ? Math.max(size * 3, 12) : size;
-        currentStroke = { color: strokeColor, size: strokeSize / cssWidth, points: [{ x: lastPoint.x / cssWidth, y: lastPoint.y / cssHeight }] };
+        currentStroke = { color: strokeColor, size: strokeSize / cssWidth, opacity: tool === 'eraser' ? 1 : strokeOpacity, gradient: gradientEnabled && tool !== 'eraser' ? { color: gradientColor, style: gradientStyle } : null, points: [{ x: lastPoint.x / cssWidth, y: lastPoint.y / cssHeight }] };
         if (tool === 'line' || tool === 'rectangle' || tool === 'ellipse') {
           linePreview = document.createElement('canvas');
           linePreview.width = canvas.width;
@@ -1366,6 +1387,8 @@
           ctx.save();
           ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
           ctx.strokeStyle = currentStroke.color;
+          ctx.globalAlpha = currentStroke.opacity ?? 1;
+          if (currentStroke.gradient && currentStroke.points.length) { const first = currentStroke.points[0], last = currentStroke.points[currentStroke.points.length - 1]; const x1 = first.x * cssWidth, y1 = first.y * cssHeight, x2 = last.x * cssWidth, y2 = last.y * cssHeight; const grad = currentStroke.gradient.style === 'radial' ? ctx.createRadialGradient(x1,y1,0,x2,y2,Math.max(1,Math.hypot(x2-x1,y2-y1))) : ctx.createLinearGradient(x1,y1,x2,y2); grad.addColorStop(0,currentStroke.color); grad.addColorStop(1,currentStroke.gradient.color); ctx.strokeStyle = grad; }
           ctx.lineWidth = currentStroke.size * cssWidth;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
@@ -1416,6 +1439,8 @@
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.strokeStyle = currentStroke.color;
+        ctx.globalAlpha = currentStroke.opacity ?? 1;
+        if (currentStroke.gradient && currentStroke.points.length) { const first = currentStroke.points[0], last = currentStroke.points[currentStroke.points.length - 1]; const x1 = first.x * cssWidth, y1 = first.y * cssHeight, x2 = last.x * cssWidth, y2 = last.y * cssHeight; const grad = currentStroke.gradient.style === 'radial' ? ctx.createRadialGradient(x1,y1,0,x2,y2,Math.max(1,Math.hypot(x2-x1,y2-y1))) : ctx.createLinearGradient(x1,y1,x2,y2); grad.addColorStop(0,currentStroke.color); grad.addColorStop(1,currentStroke.gradient.color); ctx.strokeStyle = grad; }
         ctx.lineWidth = currentStroke.size * cssWidth;
         ctx.lineTo(p.x, p.y);
         ctx.stroke();
@@ -1811,6 +1836,11 @@
           setTool('brush');
         });
       });
+      document.getElementById('gradientEnabled').addEventListener('change', event => { gradientEnabled = event.target.checked; showToast(gradientEnabled ? 'Gradient brush enabled.' : 'Solid colour brush enabled.'); });
+      document.getElementById('gradientColor').addEventListener('input', event => { gradientColor = event.target.value; });
+      document.getElementById('gradientStyle').addEventListener('change', event => { gradientStyle = event.target.value; });
+      document.getElementById('strokeOpacity').addEventListener('input', event => { strokeOpacity = Number(event.target.value) / 100; document.getElementById('opacityValue').textContent = event.target.value + '%'; });
+      document.getElementById('shareViewBtn').addEventListener('click', async () => { if (isPrivateCanvas() || isGroupCanvas()) { showToast('Read-only links are available for shared canvases only.'); return; } const url = new URL(location.href); url.search = ''; url.hash = ''; url.searchParams.set('canvas', activeCanvasId); url.searchParams.set('view', '1'); try { await navigator.clipboard.writeText(url.toString()); showToast('Read-only link copied.'); } catch { showToast('Could not copy link. Check browser clipboard permission.'); } });
       document.getElementById('customColor').addEventListener('input', event => {
         color = event.target.value;
         document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
