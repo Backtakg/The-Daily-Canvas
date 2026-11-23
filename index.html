@@ -722,6 +722,7 @@
         });
         // Apply local optimistic history state on this tab as well as the
         // durable shared history events, so the canvas redraws immediately.
+        const hidden = new Set(hiddenStrokeIds);
         ordered.forEach(row => {
           const action = row?.payload?.__canvasHistoryAction;
           if (action === 'undo' && row.payload.target_id != null) {
