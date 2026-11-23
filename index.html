@@ -1618,10 +1618,10 @@
         const completed = currentStroke;
         currentStroke = null;
         linePreview = null;
-        if (!completed || !sharedReady) {
-          showToast('Still connecting — this stroke is only on your screen.');
-          return;
-        }
+        if (!completed) return;
+        // Drawing must never depend on the realtime channel being ready.
+        // Keep the stroke locally first, then attempt the shared write below.
+        // This also makes the canvas usable while Supabase is reconnecting.
         completed.points = completed.points.map(point => {
           // Input points are normalized canvas-screen coordinates. Convert once
           // into world units; replay and zoom never mutate the stored points.
@@ -1637,7 +1637,7 @@
           showToast('Could not save this stroke. Please try again.');
           return;
         }
-        saveStatus.textContent = 'Sharing your stroke…';
+        saveStatus.textContent = sharedReady ? 'Sharing your stroke…' : 'Saving locally · reconnecting to share…';
         const localStrokeId = (isPrivateCanvas() ? 'private-stroke-' : 'local-') + makeClientId();
         canvasStrokes.push({ id: localStrokeId, session_id: sessionId, canvas_id: activeCanvasId, payload: completed });
         if (isGroupCanvas()) {
