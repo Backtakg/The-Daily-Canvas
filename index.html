@@ -707,8 +707,8 @@
         updateHistoryButtons();
       }
       function updateHistoryButtons() {
-        undoBtn.disabled = drawing || undoStack.length === 0;
-        redoBtn.disabled = drawing || redoStack.length === 0;
+        undoBtn.disabled = drawing || historySaving || undoStack.length === 0;
+        redoBtn.disabled = drawing || historySaving || redoStack.length === 0;
       }
       function renderCanvasLedger() {
         if (replaying) return;
@@ -720,8 +720,18 @@
           const left = Number(a.id), right = Number(b.id);
           return (Number.isFinite(left) ? left : Number.MAX_SAFE_INTEGER) - (Number.isFinite(right) ? right : Number.MAX_SAFE_INTEGER);
         });
+        const hidden = new Set((isPrivateCanvas() || isGroupCanvas()) ? hiddenStrokeIds : []);
         ordered.forEach(row => {
-          if (!hiddenStrokeIds.has(String(row.id))) paintSharedStroke(row.payload);
+          const action = row?.payload?.__canvasHistoryAction;
+          if (action === 'undo' && row.payload.target_id != null) {
+            hidden.add(String(row.payload.target_id));
+            return;
+          }
+          if (action === 'redo' && row.payload.target_id != null) {
+            hidden.delete(String(row.payload.target_id));
+            return;
+          }
+          if (!hidden.has(String(row.id))) paintSharedStroke(row.payload);
         });
       }
 
@@ -832,6 +842,51 @@
           console.warn('Could not persist local undo history:', error);
         }
       }
+      function rebuildOwnHistoryStacks(rows) {
+        undoStack.length = 0;
+        redoStack.length = 0;
+        const ordered = [...rows].sort((a, b) => Number(a.id) - Number(b.id));
+        for (const row of ordered) {
+          if (row.session_id !== sessionId) continue;
+          const action = row.payload?.__canvasHistoryAction;
+          const target = row.payload?.target_id;
+          if (action === 'undo' && target != null) {
+            const index = undoStack.findIndex(id => String(id) === String(target));
+            if (index >= 0) undoStack.splice(index, 1);
+            if (!redoStack.some(id => String(id) === String(target))) redoStack.push(target);
+          } else if (action === 'redo' && target != null) {
+            const index = redoStack.findIndex(id => String(id) === String(target));
+            if (index >= 0) redoStack.splice(index, 1);
+            if (!undoStack.some(id => String(id) === String(target))) undoStack.push(target);
+          } else if (row.payload && Array.isArray(row.payload.points)) {
+            undoStack.push(row.id);
+          }
+        }
+      }
+      let historySaving = false;
+      async function saveSharedHistoryAction(action, targetId) {
+        const marker = { __canvasHistoryAction: action, target_id: String(targetId) };
+        historySaving = true;
+        updateHistoryButtons();
+        try {
+          const { data, error } = await supabase.from('canvas_events').insert({
+            session_id: sessionId,
+            canvas_id: activeCanvasId,
+            event_type: 'stroke',
+            payload: marker
+          }).select('id').single();
+          if (error || !data?.id) throw error || new Error('The history event was not confirmed by the server.');
+          canvasStrokes.push({ id: data.id, session_id: sessionId, canvas_id: activeCanvasId, payload: marker });
+          return true;
+        } catch (error) {
+          console.error('Could not sync canvas history action:', error);
+          showToast('Undo/redo could not sync. Please try again.');
+          return false;
+        } finally {
+          historySaving = false;
+          updateHistoryButtons();
+        }
+      }
       function reconcileStrokeId(oldId, newId) {
         const oldKey = String(oldId);
         const newKey = String(newId);
@@ -847,33 +902,51 @@
         renderCanvasLedger();
         updateHistoryButtons();
       }
-      function undoOwnStroke() {
-        if (drawing || !undoStack.length) return;
-        const id = undoStack.pop();
-        if (!canvasStrokes.some(row => String(row.id) === String(id))) {
+      async function undoOwnStroke() {
+        if (drawing || historySaving || !undoStack.length) return;
+        const id = undoStack[undoStack.length - 1];
+        const row = canvasStrokes.find(item => String(item.id) === String(id) && Array.isArray(item.payload?.points));
+        if (!row) { undoStack.pop(); updateHistoryButtons(); return; }
+        if (isPrivateCanvas() || isGroupCanvas()) {
+          undoStack.pop();
+          hiddenStrokeIds.add(String(id));
+          persistHiddenStrokes();
+          redoStack.push(id);
+          renderCanvasLedger();
           updateHistoryButtons();
+          showToast('Your last stroke was undone on this device.');
           return;
         }
-        hiddenStrokeIds.add(String(id));
-        persistHiddenStrokes();
-        redoStack.push(id);
-        renderCanvasLedger();
-        updateHistoryButtons();
-        showToast('Your last stroke was undone on this device.');
+        if (await saveSharedHistoryAction('undo', id)) {
+          undoStack.pop();
+          redoStack.push(id);
+          renderCanvasLedger();
+          updateHistoryButtons();
+          showToast('Undo synced to this canvas.');
+        }
       }
-      function redoOwnStroke() {
-        if (drawing || !redoStack.length) return;
-        const id = redoStack.pop();
-        if (!canvasStrokes.some(row => String(row.id) === String(id))) {
+      async function redoOwnStroke() {
+        if (drawing || historySaving || !redoStack.length) return;
+        const id = redoStack[redoStack.length - 1];
+        const row = canvasStrokes.find(item => String(item.id) === String(id) && Array.isArray(item.payload?.points));
+        if (!row) { redoStack.pop(); updateHistoryButtons(); return; }
+        if (isPrivateCanvas() || isGroupCanvas()) {
+          redoStack.pop();
+          hiddenStrokeIds.delete(String(id));
+          persistHiddenStrokes();
+          undoStack.push(id);
+          renderCanvasLedger();
           updateHistoryButtons();
+          showToast('Your stroke is visible again.');
           return;
         }
-        hiddenStrokeIds.delete(String(id));
-        persistHiddenStrokes();
-        undoStack.push(id);
-        renderCanvasLedger();
-        updateHistoryButtons();
-        showToast('Your stroke is visible again.');
+        if (await saveSharedHistoryAction('redo', id)) {
+          redoStack.pop();
+          undoStack.push(id);
+          renderCanvasLedger();
+          updateHistoryButtons();
+          showToast('Redo synced to this canvas.');
+        }
       }
       function loadSaved() { /* Shared artwork is loaded from the database. */ }
 
@@ -1115,9 +1188,7 @@
                   canvasStrokes.push(row);
                   lastEventId = Math.max(lastEventId, Number(row.id));
                 }
-                const ownRows = canvasStrokes.filter(row => row.session_id === sessionId);
-                undoStack.push(...ownRows.filter(row => !hiddenStrokeIds.has(String(row.id))).map(row => row.id));
-                redoStack.push(...ownRows.filter(row => hiddenStrokeIds.has(String(row.id))).map(row => row.id).reverse());
+                rebuildOwnHistoryStacks(canvasStrokes);
                 renderCanvasLedger();
                 updateHistoryButtons();
                 sharedReady = true;
