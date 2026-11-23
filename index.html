@@ -865,7 +865,17 @@
       }
       let historySaving = false;
       async function saveSharedHistoryAction(action, targetId) {
-        const marker = { __canvasHistoryAction: action, target_id: String(targetId) };
+        // Match the existing public stroke INSERT policy (points, size and color are required).
+        // The renderer treats this payload as a history command, not as a visible stroke.
+        const marker = {
+          __canvasHistoryAction: action,
+          target_id: String(targetId),
+          points: [{ x: 0, y: 0 }],
+          size: 0.0001,
+          color: '#000000',
+          space: 'world-v1',
+          opacity: 1
+        };
         historySaving = true;
         updateHistoryButtons();
         try {
