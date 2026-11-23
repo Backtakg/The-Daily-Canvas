@@ -127,7 +127,7 @@
     .surface-control { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; }
     .surface-control select { max-width:112px; height:32px; padding:0 8px; border:1px solid var(--line); border-radius:8px; color:#66665e; background:rgba(255,254,250,.8); font:inherit; cursor:pointer; }
     .surface-control select:focus-visible { outline:2px solid #8d9e89; outline-offset:2px; }
-    .canvas-frame { position:relative; overflow:hidden; height:min(61vh, 620px); min-height:340px; border-radius:10px; background:white; box-shadow:0 2px 8px rgba(0,0,0,.045); }
+    .canvas-frame { position:relative; overflow:hidden; height:min(70vh, 760px); min-height:380px; border-radius:10px; background:white; box-shadow:0 2px 8px rgba(0,0,0,.045); }
     .canvas-world { position:absolute; inset:0; transform-origin:center center; will-change:transform; }
     .canvas-frame.pan-mode canvas { cursor:grab; }
     .canvas-frame.pan-mode.is-panning canvas { cursor:grabbing; }
@@ -316,6 +316,51 @@
       .header-live { font-size:10px; }
       .bottomline, footer { font-size:10px; }
     }
+    /* Larger drawing area in the standard workspace. */
+    @media (min-width:701px) {
+      .canvas-frame { height:min(70vh, 760px); min-height:380px; }
+    }
+    @media (max-width:700px) {
+      .canvas-frame { height:clamp(360px, 66svh, 680px); min-height:320px; }
+    }
+    /* Keep focus controls in a compact scrollable strip; let the canvas use the remaining viewport. */
+    .studio.focus-mode .toolbar {
+      flex:0 0 auto; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden;
+      max-height:none; scrollbar-width:thin;
+    }
+    .studio.focus-mode .toolbar > * { flex-shrink:0; }
+    .studio.focus-mode .canvas-wrap { flex:1 1 auto; min-height:0; padding:8px; }
+    .studio.focus-mode .canvas-frame { width:100%; height:auto; min-height:0; flex:1 1 auto; }
+    .studio.focus-mode .canvas-manager { flex:0 0 auto; }
+    .zoom-level {
+      box-sizing:border-box; width:58px; min-width:58px; height:31px; padding:0 3px;
+      border:1px solid transparent; border-radius:6px; background:transparent;
+      color:var(--muted); font:inherit; font-size:10px; font-variant-numeric:tabular-nums;
+      text-align:center;
+    }
+    .zoom-level:hover { border-color:var(--line); background:#fffefa; }
+    .zoom-level:focus { outline:2px solid #8d9e89; outline-offset:1px; border-color:#c9d2c5; background:#fffefa; color:var(--ink); }
+    @media (max-width:700px) {
+      .studio.focus-mode { inset:env(safe-area-inset-top) 6px env(safe-area-inset-bottom); }
+      .studio.focus-mode .toolbar { flex-direction:row; align-items:center; padding:7px 9px; gap:7px; }
+      .studio.focus-mode .toolbar > .tool-group:first-child,
+      .studio.focus-mode .toolbar > .tool-group:last-child,
+      .studio.focus-mode .toolbar > .palette {
+        display:flex; flex:none; flex-wrap:nowrap; overflow:visible; width:auto;
+        max-width:none; padding:0; border:0;
+      }
+      .studio.focus-mode .toolbar > .tool-group:last-child > .action-btn { height:36px; min-width:36px; }
+      .studio.focus-mode .toolbar > .tool-group:first-child .tool-btn { width:auto; min-width:36px; height:36px; padding:0 8px; }
+      .studio.focus-mode .toolbar > .tool-group:first-child .tool-label,
+      .studio.focus-mode .toolbar > .tool-group:last-child .tool-label { display:none; }
+      .studio.focus-mode .toolbar > .size-wrap { order:initial; flex:none; margin:0; min-height:32px; }
+      .studio.focus-mode .toolbar > .surface-control { order:initial; flex:none; min-height:32px; }
+      .studio.focus-mode .toolbar > .separator,
+      .studio.focus-mode .toolbar > .toolbar-spacer { display:block; }
+      .studio.focus-mode .toolbar > .toolbar-spacer { display:none; }
+      .studio.focus-mode .canvas-wrap { padding:5px; }
+      .studio.focus-mode .advanced-color { flex:0 0 auto; padding:6px 9px; gap:7px; }
+    }
   </style>
 </head>
 <body>
@@ -406,7 +451,7 @@
             <button class="action-btn" id="redoBtn" title="Redo your last undone stroke" aria-label="Redo" disabled><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h1"/></svg></button>
             <div class="zoom-controls" role="group" aria-label="Canvas zoom">
               <button class="action-btn" id="zoomOutBtn" type="button" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
-              <span class="zoom-level" id="zoomLevel" aria-live="polite">100%</span>
+              <input class="zoom-level" id="zoomLevel" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="Custom canvas scale percentage" title="Type a custom zoom percentage, such as 125%" value="100%" maxlength="6">
               <button class="action-btn" id="zoomInBtn" type="button" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
               <button class="action-btn" id="zoomResetBtn" type="button" title="Reset zoom" aria-label="Reset zoom"><svg viewBox="0 0 24 24"><path d="M4 10a8 8 0 1 1 2.3 5.7M4 4v6h6"/></svg></button>
               <button class="action-btn" id="panModeBtn" type="button" aria-pressed="false" title="Pan the infinite canvas" aria-label="Pan infinite canvas"><svg viewBox="0 0 24 24"><path d="m8 12-4 0 3-3m-3 3 3 3m9-3 4 0-3-3m3 3-3 3M12 8V4l-3 3m3-3 3 3m-3 9v4l-3-3m3 3 3-3"/></svg><span class="tool-label">Pan</span></button>
@@ -1307,7 +1352,7 @@
       }
       function applyCanvasView() {
         canvasWorld.style.transform = 'none';
-        zoomLevel.textContent = Math.round(zoom * 100) + '%';
+        zoomLevel.value = Math.round(zoom * 100) + '%';
         zoomOutBtn.disabled = zoom <= 0.1;
         zoomInBtn.disabled = zoom >= 8;
         // Repaint from the immutable world-coordinate stroke ledger on every
@@ -1920,6 +1965,26 @@
       redoBtn.title = 'Redo your last undone stroke (Ctrl/⌘ Shift Z)';
       undoBtn.addEventListener('click', undoOwnStroke);
       redoBtn.addEventListener('click', redoOwnStroke);
+      zoomLevel.addEventListener('change', () => {
+        const raw = zoomLevel.value.trim().replace(/%$/, '');
+        const percentage = Number(raw);
+        if (!raw || !Number.isFinite(percentage) || percentage < 10 || percentage > 800) {
+          zoomLevel.value = Math.round(zoom * 100) + '%';
+          showToast('Enter a scale between 10% and 800%.');
+          return;
+        }
+        setZoom(percentage / 100);
+        zoomLevel.value = Math.round(zoom * 100) + '%';
+      });
+      zoomLevel.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          zoomLevel.blur();
+        } else if (event.key === 'Escape') {
+          zoomLevel.value = Math.round(zoom * 100) + '%';
+          zoomLevel.blur();
+        }
+      });
       zoomOutBtn.addEventListener('click', () => setZoom(zoom - 0.25));
       zoomInBtn.addEventListener('click', () => setZoom(zoom + 0.25));
       zoomResetBtn.addEventListener('click', () => setZoom(1));
@@ -2067,7 +2132,7 @@
         viewX = touchGesture.worldX - (metrics.x - rect.left - rect.width / 2) / nextZoom;
         viewY = touchGesture.worldY - (metrics.y - rect.top - rect.height / 2) / nextZoom;
         zoom = nextZoom;
-        zoomLevel.textContent = Math.round(zoom * 100) + '%';
+        zoomLevel.value = Math.round(zoom * 100) + '%';
         zoomOutBtn.disabled = zoom <= 0.1;
         zoomInBtn.disabled = zoom >= 8;
         applyCanvasView();
