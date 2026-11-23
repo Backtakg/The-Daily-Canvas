@@ -720,7 +720,8 @@
           const left = Number(a.id), right = Number(b.id);
           return (Number.isFinite(left) ? left : Number.MAX_SAFE_INTEGER) - (Number.isFinite(right) ? right : Number.MAX_SAFE_INTEGER);
         });
-        const hidden = new Set((isPrivateCanvas() || isGroupCanvas()) ? hiddenStrokeIds : []);
+        // Apply local optimistic history state on this tab as well as the
+        // durable shared history events, so the canvas redraws immediately.
         ordered.forEach(row => {
           const action = row?.payload?.__canvasHistoryAction;
           if (action === 'undo' && row.payload.target_id != null) {
@@ -860,6 +861,8 @@
             if (!undoStack.some(id => String(id) === String(target))) undoStack.push(target);
           } else if (row.payload && Array.isArray(row.payload.points)) {
             undoStack.push(row.id);
+            // A new stroke invalidates any older redo branch.
+            redoStack.length = 0;
           }
         }
       }
@@ -927,12 +930,21 @@
           showToast('Your last stroke was undone on this device.');
           return;
         }
+        // Optimistically apply the undo locally; roll it back if the server
+        // rejects the durable history event.
+        hiddenStrokeIds.add(String(id));
+        persistHiddenStrokes();
+        renderCanvasLedger();
         if (await saveSharedHistoryAction('undo', id)) {
           undoStack.pop();
           redoStack.push(id);
-          renderCanvasLedger();
           updateHistoryButtons();
           showToast('Undo synced to this canvas.');
+        } else {
+          hiddenStrokeIds.delete(String(id));
+          persistHiddenStrokes();
+          renderCanvasLedger();
+          updateHistoryButtons();
         }
       }
       async function redoOwnStroke() {
@@ -950,12 +962,20 @@
           showToast('Your stroke is visible again.');
           return;
         }
+        // Optimistically restore the stroke locally; roll back on save failure.
+        hiddenStrokeIds.delete(String(id));
+        persistHiddenStrokes();
+        renderCanvasLedger();
         if (await saveSharedHistoryAction('redo', id)) {
           redoStack.pop();
           undoStack.push(id);
-          renderCanvasLedger();
           updateHistoryButtons();
           showToast('Redo synced to this canvas.');
+        } else {
+          hiddenStrokeIds.add(String(id));
+          persistHiddenStrokes();
+          renderCanvasLedger();
+          updateHistoryButtons();
         }
       }
       function loadSaved() { /* Shared artwork is loaded from the database. */ }
